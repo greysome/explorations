@@ -1,0 +1,8 @@
+To build:
+gcc status.c -o status
+gcc status-set.c -o status-set
+
+To run the demo:
+./status "" ./demo-includes.sh
+
+Writeup at wyan.win/posts/betterstatus.html
