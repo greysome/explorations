@@ -146,11 +146,27 @@ def worker(tid, w, h, M, max_uncovered, max_reveals, min_interest,
         with stats_lock:
             stats[tid]['count'] += 1
             stats[tid]['total_reveals'] += len(reveals)
+            hist = stats[tid]['hist']
+            hist[len(reveals)] = hist.get(len(reveals), 0) + 1
 
         seed += 1
 
 
 SPEC_RE = re.compile(r'^(\d+)x(\d+)_(\d+)$')
+
+_BARS = ' ▁▂▃▄▅▆▇█'
+
+def _render_hist(hist):
+    if not hist:
+        return '    (no data)'
+    lo, hi = min(hist), max(hist)
+    mx = max(hist.values())
+    parts = []
+    for k in range(lo, hi + 1):
+        v = hist.get(k, 0)
+        level = round(v / mx * 8) if mx else 0
+        parts.append(f'{k}:{_BARS[level]}')
+    return '    ' + ' '.join(parts)
 
 LABELS = {
     1: 'fwd (no-stagnation-check)',
@@ -178,7 +194,7 @@ def main():
     w, h, M = int(m.group(1)), int(m.group(2)), int(m.group(3))
     mu = args.max_uncovered if args.max_uncovered is not None else default_max_uncovered(w, h)
 
-    stats = {tid: {'count': 0, 'total_reveals': 0} for tid in range(1, 5)}
+    stats = {tid: {'count': 0, 'total_reveals': 0, 'hist': {}} for tid in range(1, 5)}
     stats_lock = threading.Lock()
 
     threads = []
@@ -195,24 +211,23 @@ def main():
         t.start()
         threads.append(t)
 
+    NLINES = 8  # 2 lines per thread (summary + histogram)
     print(f'Generating {args.spec} — 4 threads — Ctrl-C to stop')
     print(f'{"Thread":<6}  {"strategy":<28}  {"boards":>7}  {"avg reveals":>12}')
     print('-' * 60)
+    print('\n' * NLINES, end='')  # reserve space for the data block
 
     try:
         while True:
             time.sleep(args.print_interval)
             with stats_lock:
                 snap = {tid: dict(v) for tid, v in stats.items()}
-            rows = []
+            print(f'\033[{NLINES}A', end='')  # move up to start of data block
             for tid in range(1, 5):
                 c = snap[tid]['count']
                 avg = snap[tid]['total_reveals'] / c if c else float('nan')
-                rows.append(f'  T{tid}    {LABELS[tid]:<28}  {c:>7}  {avg:>12.2f}')
-            # Overwrite previous block.
-            print('\033[4A', end='')   # move up 4 lines
-            for row in rows:
-                print(row)
+                print(f'  T{tid}    {LABELS[tid]:<28}  {c:>7}  {avg:>12.2f}')
+                print(_render_hist(snap[tid]['hist']))
     except KeyboardInterrupt:
         pass
 
@@ -224,6 +239,7 @@ def main():
         avg = snap[tid]['total_reveals'] / c if c else float('nan')
         out = f'{args.spec}_{tid}.boards'
         print(f'  T{tid} {LABELS[tid]}: {c} boards, avg {avg:.2f} reveals -> {out}')
+        print(_render_hist(snap[tid]['hist']))
 
 
 if __name__ == '__main__':
