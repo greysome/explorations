@@ -9,7 +9,6 @@ import random
 from dataclasses import dataclass
 
 from board import Board, iter_bits
-from gen_board import pregenerate_dense_board
 from solver import solve, SOLVED, STUCK
 
 
@@ -142,15 +141,9 @@ def generate(w, h, M, seed=0, max_reveals=5, min_interest=3,
     some 0-cells, which makes the board easier to solve. Defaults to 0 for
     small boards and a small positive value for larger ones.
     """
+    from make_boards import pregenerate_dense_board, default_max_uncovered
     if max_uncovered is None:
-        # Heuristic: for larger boards we let some 0-cells through to keep
-        # the solver's frontier components small enough to enumerate.
-        if w * h <= 36:
-            max_uncovered = 0
-        elif w * h <= 64:
-            max_uncovered = 6
-        else:
-            max_uncovered = max(8, w * h // 15)
+        max_uncovered = default_max_uncovered(w, h)
     for attempt in range(max_attempts):
         rng = random.Random(seed * 1_000_003 + attempt)
         mines = pregenerate_dense_board(rng, w, h, M, max_uncovered=max_uncovered)

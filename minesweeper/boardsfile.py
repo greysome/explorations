@@ -4,22 +4,19 @@ A `.boards` file is a text file with one or more boards separated by blank
 lines. Each board is:
 
     # w=5 h=5 mines=10 score=20 reveals=4 seed=12345
-    .X.X.
-    X..X.
+    .,.,.
+    ,..,.
     .....
-    o.X.X
+    1.,.2
     .....
 
 The optional `# ...` header line carries metadata; everything after `#` is
 free-form key=value pairs. The grid uses:
 
-  .  safe, hidden
-  X  mine
-  o  safe, initially revealed (a member of the initial reveal set)
-
-The header is mandatory for the writer (so file consumers can find w/h
-without inferring from the first board), and parsed when present by the
-reader.
+  ,           a mine (hidden from the player; ground truth)
+  0-8         an initially-revealed safe cell, the digit being its clue
+              (count of adjacent mines)
+  .           a safe cell that is not initially revealed
 """
 
 from dataclasses import dataclass
@@ -30,7 +27,7 @@ class StoredBoard:
     w: int
     h: int
     mines: list   # cell indices (sorted)
-    reveals: list  # cell indices (in original add order if available)
+    reveals: list  # cell indices, in row-major order
     meta: dict
 
 
@@ -47,13 +44,26 @@ def _parse_header(line):
     return meta
 
 
+def _count_adjacent_mines(w, h, mines_set, idx):
+    r, c = divmod(idx, w)
+    n = 0
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr == 0 and dc == 0:
+                continue
+            rr, cc = r + dr, c + dc
+            if 0 <= rr < h and 0 <= cc < w:
+                if rr * w + cc in mines_set:
+                    n += 1
+    return n
+
+
 def parse_boards(text):
     """Yield StoredBoard objects from text."""
     lines = text.splitlines()
     i = 0
     n = len(lines)
     while i < n:
-        # Skip blank lines.
         while i < n and not lines[i].strip():
             i += 1
         if i >= n:
@@ -62,7 +72,6 @@ def parse_boards(text):
         if lines[i].lstrip().startswith('#'):
             meta = _parse_header(lines[i])
             i += 1
-        # Collect non-blank grid lines.
         grid_lines = []
         while i < n and lines[i].strip():
             grid_lines.append(lines[i].rstrip())
@@ -78,18 +87,28 @@ def parse_boards(text):
                     f'{len(line)} != {w}')
         mines = []
         reveals = []
+        revealed_digits = {}
         for r, line in enumerate(grid_lines):
             for c, ch in enumerate(line):
                 idx = r * w + c
-                if ch == 'X':
+                if ch == ',':
                     mines.append(idx)
-                elif ch == 'o':
-                    reveals.append(idx)
                 elif ch == '.':
                     pass
+                elif ch.isdigit():
+                    revealed_digits[idx] = int(ch)
+                    reveals.append(idx)
                 else:
                     raise ValueError(f'unknown cell char {ch!r} at ({r},{c})')
-        # If the header recorded w/h/mines, sanity-check them.
+        # Verify the revealed digits match the mine layout.
+        mines_set = set(mines)
+        for idx, claimed in revealed_digits.items():
+            actual = _count_adjacent_mines(w, h, mines_set, idx)
+            if claimed != actual:
+                r, c = divmod(idx, w)
+                raise ValueError(
+                    f'revealed digit at ({r},{c}) is {claimed} '
+                    f'but adjacent-mine count is {actual}')
         if 'w' in meta and meta['w'] != w:
             raise ValueError(f'header w={meta["w"]} disagrees with grid w={w}')
         if 'h' in meta and meta['h'] != h:
@@ -101,11 +120,13 @@ def parse_boards(text):
 
 
 def format_board(w, h, mines, reveals, meta=None):
-    """Return the text encoding of one board (with trailing newline,
-    no separating blank line)."""
+    """Return the text encoding of one board (trailing newline).
+
+    `mines` and `reveals` are cell indices. Revealed cells are written as
+    their clue digit (count of adjacent mines).
+    """
     mines_set = set(mines)
     reveals_set = set(reveals)
-    out = []
     if meta is None:
         meta = {}
     meta_full = dict(meta)
@@ -114,15 +135,15 @@ def format_board(w, h, mines, reveals, meta=None):
     meta_full.setdefault('mines', len(mines))
     meta_full.setdefault('reveals', len(reveals))
     header = '# ' + ' '.join(f'{k}={v}' for k, v in meta_full.items())
-    out.append(header)
+    out = [header]
     for r in range(h):
         row = []
         for c in range(w):
             idx = r * w + c
             if idx in mines_set:
-                row.append('X')
+                row.append(',')
             elif idx in reveals_set:
-                row.append('o')
+                row.append(str(_count_adjacent_mines(w, h, mines_set, idx)))
             else:
                 row.append('.')
         out.append(''.join(row))
@@ -130,11 +151,10 @@ def format_board(w, h, mines, reveals, meta=None):
 
 
 def append_board(path, w, h, mines, reveals, meta=None):
-    """Append one board to a .boards file (creating it if needed)."""
     text = format_board(w, h, mines, reveals, meta)
     with open(path, 'a') as f:
         f.write(text)
-        f.write('\n')  # blank separator
+        f.write('\n')
 
 
 def load_boards(path):
