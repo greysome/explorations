@@ -52,6 +52,7 @@ class Game:
         self.root = root
         self.files = files
         self.boards = []           # list of StoredBoard for current file
+        self._board_by_key = {}
         self.current_file = None
         self.board = None          # Board for current selection
         self.M = 0
@@ -111,19 +112,22 @@ class Game:
             self.boards = []
             self.status_label.config(text=f'load error: {e}')
             return
-        self.board_box['values'] = [str(i) for i in range(len(self.boards))]
+        keys = [str(sb.meta.get('seed', i)) for i, sb in enumerate(self.boards)]
+        self._board_by_key = dict(zip(keys, self.boards))
+        self.board_box['values'] = keys
         if self.boards:
-            self.board_var.set('0')
+            self.board_var.set(keys[0])
             self._on_board_change()
         else:
             self.status_label.config(text='no boards in file')
 
     def _on_board_change(self, _evt=None):
-        idx_str = self.board_var.get()
-        if not idx_str:
+        key = self.board_var.get()
+        if not key:
             return
-        idx = int(idx_str)
-        sb = self.boards[idx]
+        sb = self._board_by_key.get(key)
+        if sb is None:
+            return
         self.board = Board.from_mine_indices(sb.w, sb.h, sb.mines)
         self.M = len(sb.mines)
         self.revealed = 0
