@@ -1,0 +1,200 @@
+# w=8 h=8 mines=26 score=62 reveals=5 seed=1
+X....XXX
+...o..XX
+.X...XoX
+X.X.XXXX
+.oX..X.X
+...X...o
+..X.o.XX
+.X.X..XX
+
+# w=8 h=8 mines=26 score=25 reveals=7 seed=2
+XXX..X..
+..XX.X.X
+..X.....
+o...XX..
+..XXoXoX
+XXXXoXX.
+...oXoo.
+...XXXX.
+
+# w=8 h=8 mines=26 score=22 reveals=8 seed=10
+X...XX..
+..X.oXXo
+..XXoX.X
+......oX
+..XX..X.
+o.X.XXXX
+..X.X.oo
+oXX.X.XX
+
+# w=8 h=8 mines=26 score=36 reveals=8 seed=12
+.X..oXX.
+Xo.Xo...
+X.X..X.o
+X.XXXX..
+..oXXX..
+XX..X.X.
+X.X.X.Xo
+o....oXX
+
+# w=8 h=8 mines=26 score=34 reveals=4 seed=15
+.X..XXXX
+X..X..XX
+......X.
+XX......
+....X.X.
+oX..X..X
+..XXXoXX
+o.XXXXo.
+
+# w=8 h=8 mines=26 score=35 reveals=6 seed=18
+XX..XXXo
+..X.X.XX
+XoXo.X.X
+.X......
+oXX..X..
+......X.
+..XX..oX
+o..XXXXX
+
+# w=8 h=8 mines=26 score=15 reveals=6 seed=21
+X.o..X..
+X....X..
+XXX...XX
+XXX...X.
+ooX.XXXo
+XXX.X...
+.XX.X.oX
+.o..X...
+
+# w=8 h=8 mines=26 score=46 reveals=8 seed=22
+XXX..XoX
+..o.XXXX
+o.X...Xo
+Xoo..XXX
+X....XX.
+...X..Xo
+Xo.X....
+.X.X..XX
+
+# w=8 h=8 mines=26 score=14 reveals=8 seed=26
+X.X...XX
+..oX..oo
+X..X.XXX
+XXX....X
+X..X.o.X
+.XoX....
+.X.oXX.X
+..o.XXXo
+
+# w=8 h=8 mines=26 score=25 reveals=5 seed=33
+XoX..X..
+..X...X.
+o..X..X.
+....X.X.
+XX.XXXXX
+ooX..X..
+.XX..X..
+.X.XXXXo
+
+# w=8 h=8 mines=26 score=27 reveals=5 seed=35
+o.X.X.XX
+.X.X...X
+oo..X.X.
+XX..X..X
+XXXXX.X.
+Xo.X..X.
+.......X
+o...XX.X
+
+# w=8 h=8 mines=26 score=14 reveals=5 seed=36
+oXX....X
+XX..XXX.
+....X.X.
+.....XoX
+X..o.XoX
+X....XXo
+.X.X.XX.
+..XX..XX
+
+# w=8 h=8 mines=26 score=40 reveals=6 seed=39
+.XXXXX.o
+.X..Xo..
+XX.oX.XX
+...X...o
+X..X.X.X
+..X.X...
+oX.XoX..
+XX..X.X.
+
+# w=8 h=8 mines=26 score=56 reveals=7 seed=40
+o...XXX.
+..XX.oX.
+.X.XX.X.
+.XXoX..X
+XooX....
+.XX.X...
+..XoX..o
+XX.XXX..
+
+# w=8 h=8 mines=26 score=67 reveals=7 seed=42
+XX.XXXXo
+Xo.oXo.X
+XXX...X.
+X...o.XX
+..XXX..X
+X.X...X.
+...X....
+o.XX.o..
+
+# w=8 h=8 mines=26 score=37 reveals=4 seed=49
+XX..XX..
+..X.X..X
+X.X.o.Xo
+....X.XX
+..XX..X.
+o..X..XX
+....XX.X
+oX...XXX
+
+# w=8 h=8 mines=26 score=31 reveals=6 seed=51
+....XX.X
+o.X.....
+...X....
+X.XXXoXX
+...XXoXX
+..XX.X.X
+XX...oXX
+oX...XoX
+
+# w=8 h=8 mines=26 score=55 reveals=7 seed=55
+XoXX.X.X
+.XXX....
+........
+XXXX.X.o
+XoXX.o..
+XXXoX..X
+X......X
+o.XX..Xo
+
+# w=8 h=8 mines=26 score=53 reveals=8 seed=62
+XX.X..X.
+oX.XXXX.
+XXX...X.
+.X.Xo..X
+o.X....X
+o...X.XX
+X.o.XX.o
+.Xo..o.X
+
+# w=8 h=8 mines=26 score=38 reveals=6 seed=64
+oX....oX
+XX....Xo
+.XX..XXX
+.XXXXX..
+.X.X.o.X
+.X.o....
+..XXXX.X
+oXX.....
+

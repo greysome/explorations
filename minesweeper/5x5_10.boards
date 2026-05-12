@@ -1,0 +1,140 @@
+# w=5 h=5 mines=10 score=20 reveals=5 seed=0
+X.oXo
+o...o
+.X.XX
+XX...
+oXXX.
+
+# w=5 h=5 mines=10 score=32 reveals=3 seed=1
+X.X.X
+..o.X
+X.X..
+.X.X.
+XX.oo
+
+# w=5 h=5 mines=10 score=23 reveals=4 seed=2
+.XXoX
+...X.
+oX...
+oo.XX
+XX..X
+
+# w=5 h=5 mines=10 score=27 reveals=4 seed=3
+XooX.
+.oXX.
+XoXX.
+.....
+XX.X.
+
+# w=5 h=5 mines=10 score=12 reveals=2 seed=4
+XoX..
+XXXX.
+.o.X.
+...XX
+X....
+
+# w=5 h=5 mines=10 score=32 reveals=5 seed=5
+.Xo..
+X.XXX
+X..Xo
+.X.X.
+.ooXo
+
+# w=5 h=5 mines=10 score=19 reveals=4 seed=7
+oo..X
+X.X.X
+o.XXX
+..X.X
+X...o
+
+# w=5 h=5 mines=10 score=37 reveals=5 seed=8
+Xo.XX
+XXX..
+..X.o
+o...X
+oX.Xo
+
+# w=5 h=5 mines=10 score=31 reveals=4 seed=9
+oo.XX
+XX...
+..X.o
+.X.Xo
+..XXX
+
+# w=5 h=5 mines=10 score=12 reveals=3 seed=10
+oo..X
+XX...
+o.XX.
+..XX.
+XX.X.
+
+# w=5 h=5 mines=10 score=32 reveals=6 seed=11
+o...X
+oX..o
+...XX
+.XXXo
+XoXXo
+
+# w=5 h=5 mines=10 score=36 reveals=3 seed=12
+.o..X
+XoX..
+....X
+X.X..
+XoXXX
+
+# w=5 h=5 mines=10 score=18 reveals=3 seed=13
+X...X
+XX.XX
+X....
+Xo.o.
+.X.Xo
+
+# w=5 h=5 mines=10 score=20 reveals=5 seed=14
+ooX..
+X...X
+o.X..
+..XXX
+XoXoX
+
+# w=5 h=5 mines=10 score=32 reveals=4 seed=15
+.XoXX
+.XX..
+XX...
+oo..X
+.X.Xo
+
+# w=5 h=5 mines=10 score=32 reveals=6 seed=16
+oo.Xo
+X....
+XoXXo
+..X..
+XXXoX
+
+# w=5 h=5 mines=10 score=19 reveals=6 seed=17
+o.Xoo
+X..XX
+X.o.X
+..oX.
+XXXo.
+
+# w=5 h=5 mines=10 score=25 reveals=5 seed=18
+oX.oo
+XX..X
+.XooX
+.X...
+X.X.X
+
+# w=5 h=5 mines=10 score=28 reveals=5 seed=19
+oo.Xo
+X....
+.XoXX
+...XX
+X.XXo
+
+# w=5 h=5 mines=10 score=27 reveals=6 seed=20
+oooX.
+XoXX.
+.XXX.
+...Xo
+oX..X
+
