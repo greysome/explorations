@@ -518,8 +518,12 @@ def solve(board, revealed, flagged, M):
         return revealed, flagged, CONTRADICTION, log
 
     occupied_full = (1 << board.area) - 1
+    safe_mask = occupied_full & ~board.mines
     while True:
-        if (revealed | flagged) == occupied_full:
+        # Win condition matches the game: all safe cells revealed.
+        # The solver doesn't need to flag every mine — an unprovable mine
+        # is fine as long as the player never has to click on it.
+        if (revealed & safe_mask) == safe_mask:
             return revealed, flagged, SOLVED, log
 
         revealed, flagged, changed, status = _frontier_pass(
