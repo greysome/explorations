@@ -204,7 +204,7 @@ def main():
         t = threading.Thread(
             target=worker,
             args=(tid, w, h, M, mu, args.max_reveals, args.min_interest,
-                  args.seed + tid * 1_000_000, out_path,
+                  args.seed, out_path,
                   stats, stats_lock, file_lock),
             daemon=True,
         )
