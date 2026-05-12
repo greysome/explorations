@@ -64,14 +64,14 @@ def iter_bits(bitset):
 def render(board, revealed, flagged, show_mines=False):
     """Return a string rendering of the board state."""
     lines = []
-    # Column header: a b c ...
+    # Column header: a b c ... (3-space gutter matches the 2-char row label
+    # plus the join space).
     header = '   ' + ' '.join(chr(ord('a') + c) for c in range(board.w))
     lines.append(header)
     for r in range(board.h):
-        row = [f'{r + 1:>2} ']
+        row = [f'{r + 1:>2}']
         for c in range(board.w):
             i = r * board.w + c
-            bit = 1 << i
             is_mine = (board.mines >> i) & 1
             if (flagged >> i) & 1:
                 ch = 'F'
@@ -80,11 +80,11 @@ def render(board, revealed, flagged, show_mines=False):
                     ch = '*'
                 else:
                     n = board.counts[i]
-                    ch = '.' if n == 0 else str(n)
+                    ch = ' ' if n == 0 else str(n)
             elif show_mines and is_mine:
                 ch = 'x'
             else:
-                ch = '·'  # middle dot
+                ch = '·'
             row.append(ch)
         lines.append(' '.join(row))
     return '\n'.join(lines)
