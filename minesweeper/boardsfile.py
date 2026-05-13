@@ -119,23 +119,25 @@ def parse_boards(text):
         yield StoredBoard(w=w, h=h, mines=mines, reveals=reveals, meta=meta)
 
 
-def format_board(w, h, mines, reveals, meta=None):
+def format_board(w, h, mines, reveals, meta=None, *, header=True):
     """Return the text encoding of one board (trailing newline).
 
     `mines` and `reveals` are cell indices. Revealed cells are written as
-    their clue digit (count of adjacent mines).
+    their clue digit (count of adjacent mines). Pass header=False to omit
+    the metadata comment line.
     """
     mines_set = set(mines)
     reveals_set = set(reveals)
-    if meta is None:
-        meta = {}
-    meta_full = dict(meta)
-    meta_full.setdefault('w', w)
-    meta_full.setdefault('h', h)
-    meta_full.setdefault('mines', len(mines))
-    meta_full.setdefault('reveals', len(reveals))
-    header = '# ' + ' '.join(f'{k}={v}' for k, v in meta_full.items())
-    out = [header]
+    out = []
+    if header:
+        if meta is None:
+            meta = {}
+        meta_full = dict(meta)
+        meta_full.setdefault('w', w)
+        meta_full.setdefault('h', h)
+        meta_full.setdefault('mines', len(mines))
+        meta_full.setdefault('reveals', len(reveals))
+        out.append('# ' + ' '.join(f'{k}={v}' for k, v in meta_full.items()))
     for r in range(h):
         row = []
         for c in range(w):

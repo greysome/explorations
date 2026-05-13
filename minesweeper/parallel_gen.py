@@ -20,8 +20,8 @@ import time
 
 from board import Board
 from boardsfile import append_board
-from generator import interest_score, _try_solve, minimize
-from make_boards import pregenerate_dense_board, default_max_uncovered
+from make_boards import (interest_score, _try_solve, minimize,
+                         pregenerate_dense_board)
 from solver import SOLVED
 
 # ── per-thread behaviour flags ──────────────────────────────────────────────
@@ -106,7 +106,7 @@ def build_reveal_set(board, M, rng, max_reveals, *, require_progress):
     return None, None
 
 
-def worker(tid, w, h, M, max_uncovered, max_reveals, min_interest,
+def worker(tid, w, h, M, max_reveals, min_interest,
            seed_start, out_path, stats, stats_lock, file_lock):
     req_progress = REQUIRE_PROGRESS[tid]
     do_min = DO_MINIMIZE[tid]
@@ -115,7 +115,7 @@ def worker(tid, w, h, M, max_uncovered, max_reveals, min_interest,
     seed = seed_start
     while True:
         rng = random.Random(seed)
-        mines = pregenerate_dense_board(rng, w, h, M, max_uncovered=max_uncovered)
+        mines = pregenerate_dense_board(rng, w, h, M, max_uncovered=0)
         board = Board.from_mine_indices(w, h, mines)
 
         reveals, log = build_reveal_set(
@@ -182,7 +182,6 @@ def main():
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--max-reveals', type=int, default=10)
     p.add_argument('--min-interest', type=int, default=3)
-    p.add_argument('--max-uncovered', type=int, default=None)
     p.add_argument('--print-interval', type=float, default=2.0,
                    help='seconds between stats lines')
     args = p.parse_args()
@@ -192,7 +191,6 @@ def main():
         print(f'bad spec {args.spec!r}, want <w>x<h>_<m>', file=sys.stderr)
         sys.exit(1)
     w, h, M = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    mu = args.max_uncovered if args.max_uncovered is not None else default_max_uncovered(w, h)
 
     stats = {tid: {'count': 0, 'total_reveals': 0, 'hist': {}} for tid in range(1, 5)}
     stats_lock = threading.Lock()
@@ -203,7 +201,7 @@ def main():
         file_lock = threading.Lock()
         t = threading.Thread(
             target=worker,
-            args=(tid, w, h, M, mu, args.max_reveals, args.min_interest,
+            args=(tid, w, h, M, args.max_reveals, args.min_interest,
                   args.seed, out_path,
                   stats, stats_lock, file_lock),
             daemon=True,
