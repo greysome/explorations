@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 a.out
+.venv/
 *_1.boards
 *_2.boards
 *_3.boards
