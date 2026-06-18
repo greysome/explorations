@@ -26,25 +26,20 @@
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
-  .wrap {
+  body {
     max-width: 480px;
     margin: 0 auto;
     padding: 18px 14px max(20px, env(safe-area-inset-bottom));
-  }
-  .hud {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: 10px;
+    row-gap: 12px;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
   }
-  .mine-counter {
+  #mineCount {
+    grid-column: 1;
     background: #0e0f12;
     border: 1px solid var(--border);
-    border-radius: 6px;
     padding: 6px 10px;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
@@ -53,28 +48,27 @@
     min-width: 58px;
     text-align: center;
   }
-  .hud .spacer { flex: 1; }
-  button {
+  #newBoard {
+    grid-column: 3;
     background: var(--accent);
     color: white;
     border: 0;
-    border-radius: 6px;
     padding: 9px 14px;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
   }
-  button:disabled { opacity: 0.6; cursor: default; }
-  button:hover:not(:disabled) { filter: brightness(1.1); }
+  #newBoard:disabled { opacity: 0.6; cursor: default; }
+  #newBoard:hover:not(:disabled) { filter: brightness(1.1); }
 
-  .board {
+  #board {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
     gap: 2px;
     background: var(--border);
     border: 1px solid var(--border);
-    border-radius: 6px;
     padding: 2px;
     aspect-ratio: 1 / 1;
     width: 100%;
@@ -83,7 +77,6 @@
   }
   .cell {
     background: var(--panel2);
-    border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -98,7 +91,6 @@
   .cell.revealed.num { cursor: pointer; }
   .cell.flag { color: var(--flag); }
   .cell.mine { background: var(--mine); color: white; }
-  .cell.mine.exploded { background: #ff7066; }
   .c1 { color: #5b8def; }
   .c2 { color: #6fcf76; }
   .c3 { color: #e3554f; }
@@ -110,15 +102,9 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="hud">
-    <div class="mine-counter" id="mineCount">0</div>
-    <div class="spacer"></div>
-    <button id="newBoard">New</button>
-  </div>
-
-  <div class="board" id="board"></div>
-</div>
+  <div id="mineCount">0</div>
+  <button id="newBoard">New</button>
+  <div id="board"></div>
 
 <script>
 "use strict";
@@ -999,7 +985,7 @@ function buildBoardDom() {
 }
 
 function render() {
-  const { board, revealed, flagged, exploded } = state;
+  const { board, revealed, flagged, won } = state;
   const cells = boardEl.children;
   for (let i = 0; i < AREA; i++) {
     const el = cells[i];
@@ -1011,13 +997,16 @@ function render() {
     if (isRev) {
       if (isMine) {
         el.classList.add('mine');
-        if (i === exploded) el.classList.add('exploded');
         el.textContent = '✱';
       } else {
         el.classList.add('revealed');
         const n = board.counts[i];
         if (n > 0) { el.classList.add('num', 'c' + n); el.textContent = n; }
       }
+    } else if (isFlag && won) {
+      // Win indication: flagged cells flip to their mine appearance.
+      el.classList.add('mine');
+      el.textContent = '✱';
     } else {
       el.classList.add('hidden');
       if (isFlag) { el.classList.add('flag'); el.textContent = '⚑'; }
@@ -1026,21 +1015,22 @@ function render() {
   mineEl.textContent = state.totalMines - popcount(state.flagged);
 }
 
+// Revealing a mine is allowed and does not end the game — the cell just
+// flips to its mine face. The game only ends when every safe cell has
+// been revealed (win); there is no explicit lose state.
 function playerReveal(i) {
-  if (state.over) return;
+  if (state.won) return;
   if ((state.flagged & bit(i)) !== ZERO) return;
   if ((state.revealed & bit(i)) !== ZERO) return;
   if ((state.board.mines & bit(i)) !== ZERO) {
     state.revealed |= bit(i);
-    state.exploded = i;
-    loseGame();
-    return;
+  } else {
+    state.revealed = revealCell(state.board, i, state.revealed, state.flagged);
   }
-  state.revealed = revealCell(state.board, i, state.revealed, state.flagged);
 }
 
 function playerChord(i) {
-  if (state.over) return;
+  if (state.won) return;
   if ((state.revealed & bit(i)) === ZERO) return;
   const n = state.board.counts[i];
   if (n === 0) return;
@@ -1048,27 +1038,19 @@ function playerChord(i) {
   const flaggedAround = popcount(nm & state.flagged);
   if (flaggedAround !== n) return;
   const toReveal = nm & ~state.revealed & ~state.flagged;
-  for (const j of bitsOf(toReveal)) {
-    playerReveal(j);
-    if (state.over) return;
-  }
+  for (const j of bitsOf(toReveal)) playerReveal(j);
 }
 
 function playerFlag(i) {
-  if (state.over) return;
+  if (state.won) return;
   if ((state.revealed & bit(i)) !== ZERO) return;
   state.flagged ^= bit(i);
 }
 
-function loseGame() {
-  state.over = true;
-  state.revealed |= state.board.mines;
-}
-
 function checkWin() {
-  if (state.over) return;
+  if (state.won) return;
   const safeMask = ALL_AREA & ~state.board.mines;
-  if ((state.revealed & safeMask) === safeMask) state.over = true;
+  if ((state.revealed & safeMask) === safeMask) state.won = true;
 }
 
 /* ------------------------------ gestures ---------------------------------- */
@@ -1167,7 +1149,7 @@ function newGame() {
     state = {
       board, totalMines: M,
       revealed, flagged: ZERO,
-      exploded: -1, over: false,
+      won: false,
     };
     buildBoardDom();
     render();
@@ -1176,7 +1158,7 @@ function newGame() {
 
 // Suppress the page-level context menu / long-press selection on iOS.
 document.addEventListener('contextmenu', (e) => {
-  if (e.target.closest('.board')) e.preventDefault();
+  if (e.target.closest('#board')) e.preventDefault();
 });
 
 newGame();
