@@ -1067,6 +1067,7 @@ function checkWin() {
  * moving more than ~10 px before release.
  */
 let press = null;
+let lastPointerType = '';
 
 function clearPress(removePressing = true) {
   if (!press) return;
@@ -1076,6 +1077,7 @@ function clearPress(removePressing = true) {
 }
 
 boardEl.addEventListener('pointerdown', (e) => {
+  lastPointerType = e.pointerType || 'mouse';
   if (e.button !== undefined && e.button !== 0) return; // ignore right-click here
   const t = e.target.closest('.cell');
   if (!t) return;
@@ -1121,14 +1123,15 @@ boardEl.addEventListener('pointerup', (e) => {
 });
 
 boardEl.addEventListener('pointercancel', () => clearPress());
-boardEl.addEventListener('pointerleave', (e) => {
-  // pointerleave on the board container only matters if we weren't capturing.
-  if (!press) return;
-});
 
-// Right-click on desktop = flag, for parity.
+// On touch/pen, the OS may fire a follow-up `contextmenu` event after a
+// long-press even after we've already fired the flag from our own timer.
+// Re-running playerFlag here would toggle (and undo) the flag — so we
+// only treat contextmenu as a flag intent for mouse input; touch/pen
+// long-presses are handled exclusively by the press timer.
 boardEl.addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  if (lastPointerType === 'touch' || lastPointerType === 'pen') return;
   const t = e.target.closest('.cell');
   if (!t) return;
   clearPress();
