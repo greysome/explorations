@@ -31,16 +31,6 @@
     margin: 0 auto;
     padding: 18px 14px max(20px, env(safe-area-inset-bottom));
   }
-  header h1 {
-    margin: 0 0 2px;
-    font-size: 18px;
-    font-weight: 600;
-  }
-  header .sub {
-    color: var(--muted);
-    font-size: 12px;
-    margin-bottom: 12px;
-  }
   .hud {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -63,14 +53,7 @@
     min-width: 58px;
     text-align: center;
   }
-  .status {
-    flex: 1;
-    font-size: 13px;
-    color: var(--muted);
-    line-height: 1.3;
-  }
-  .status.win  { color: #6fcf76; }
-  .status.lose { color: var(--mine); }
+  .hud .spacer { flex: 1; }
   button {
     background: var(--accent);
     color: white;
@@ -84,32 +67,10 @@
   button:disabled { opacity: 0.6; cursor: default; }
   button:hover:not(:disabled) { filter: brightness(1.1); }
 
-  .slider-row {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    font-size: 13px;
-  }
-  .slider-row label { color: var(--muted); }
-  .slider-row input[type="range"] {
-    flex: 1;
-    accent-color: var(--accent);
-  }
-  .slider-row .val {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    min-width: 28px;
-    text-align: right;
-  }
-
   .board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
     gap: 2px;
     background: var(--border);
     border: 1px solid var(--border);
@@ -129,7 +90,6 @@
     font-weight: 700;
     font-size: clamp(15px, 4.6vw, 24px);
     cursor: pointer;
-    transition: background 80ms;
     position: relative;
   }
   .cell.hidden { background: #4a4e57; }
@@ -139,14 +99,6 @@
   .cell.flag { color: var(--flag); }
   .cell.mine { background: var(--mine); color: white; }
   .cell.mine.exploded { background: #ff7066; }
-  .cell.initial::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 3px;
-    box-shadow: inset 0 0 0 1.5px var(--safe);
-    pointer-events: none;
-  }
   .c1 { color: #5b8def; }
   .c2 { color: #6fcf76; }
   .c3 { color: #e3554f; }
@@ -155,59 +107,17 @@
   .c6 { color: #4dc4c4; }
   .c7 { color: #ececec; }
   .c8 { color: #999; }
-
-  .meta {
-    margin-top: 8px;
-    font-size: 11px;
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-    line-height: 1.5;
-  }
-  footer {
-    margin-top: 12px;
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.55;
-  }
-  footer kbd {
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 11px;
-    font-family: inherit;
-  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Dense Minesweeper</h1>
-    <div class="sub">No-guess 8×8 boards. Tap to reveal or chord, press-and-hold to flag.</div>
-  </header>
-
   <div class="hud">
     <div class="mine-counter" id="mineCount">0</div>
-    <div class="status" id="status">Tap to reveal · hold to flag.</div>
+    <div class="spacer"></div>
     <button id="newBoard">New</button>
   </div>
 
-  <div class="slider-row">
-    <label for="mineSlider">Mines</label>
-    <input id="mineSlider" type="range" min="10" max="40" value="26" />
-    <div class="val" id="mineSliderVal">26</div>
-  </div>
-
   <div class="board" id="board"></div>
-
-  <div class="meta" id="meta"></div>
-
-  <footer>
-    <kbd>Tap</kbd> hidden cell → reveal &nbsp;·&nbsp;
-    <kbd>Tap</kbd> revealed number → chord &nbsp;·&nbsp;
-    <kbd>Hold</kbd> → toggle flag.
-    Cells outlined in green are the solver-chosen opening reveals.
-  </footer>
 </div>
 
 <script>
@@ -1070,20 +980,13 @@ function generate(w, h, M, seed = (Math.random() * 0x7fffffff) | 0) {
  * UI
  * ========================================================================= */
 
-const boardEl    = document.getElementById('board');
-const mineEl     = document.getElementById('mineCount');
-const statusEl   = document.getElementById('status');
-const metaEl     = document.getElementById('meta');
-const newBtn     = document.getElementById('newBoard');
-const slider     = document.getElementById('mineSlider');
-const sliderVal  = document.getElementById('mineSliderVal');
+const DEFAULT_M = 26;
+
+const boardEl = document.getElementById('board');
+const mineEl  = document.getElementById('mineCount');
+const newBtn  = document.getElementById('newBoard');
 
 let state = null;
-
-function setStatus(msg, cls = '') {
-  statusEl.textContent = msg;
-  statusEl.className = 'status ' + cls;
-}
 
 function buildBoardDom() {
   boardEl.innerHTML = '';
@@ -1096,7 +999,7 @@ function buildBoardDom() {
 }
 
 function render() {
-  const { board, revealed, flagged, initial, exploded } = state;
+  const { board, revealed, flagged, exploded } = state;
   const cells = boardEl.children;
   for (let i = 0; i < AREA; i++) {
     const el = cells[i];
@@ -1119,7 +1022,6 @@ function render() {
       el.classList.add('hidden');
       if (isFlag) { el.classList.add('flag'); el.textContent = '⚑'; }
     }
-    if ((initial & bit(i)) !== ZERO) el.classList.add('initial');
   }
   mineEl.textContent = state.totalMines - popcount(state.flagged);
 }
@@ -1161,16 +1063,12 @@ function playerFlag(i) {
 function loseGame() {
   state.over = true;
   state.revealed |= state.board.mines;
-  setStatus('Boom — that one was a mine.', 'lose');
 }
 
 function checkWin() {
   if (state.over) return;
   const safeMask = ALL_AREA & ~state.board.mines;
-  if ((state.revealed & safeMask) === safeMask) {
-    state.over = true;
-    setStatus('Solved.', 'win');
-  }
+  if ((state.revealed & safeMask) === safeMask) state.over = true;
 }
 
 /* ------------------------------ gestures ---------------------------------- */
@@ -1253,44 +1151,26 @@ boardEl.addEventListener('contextmenu', (e) => {
 
 /* ------------------------------ controls ---------------------------------- */
 
-slider.addEventListener('input', () => { sliderVal.textContent = slider.value; });
-
-newBtn.addEventListener('click', () => {
-  newGame();
-});
+newBtn.addEventListener('click', () => { newGame(); });
 
 function newGame() {
   newBtn.disabled = true;
-  const M = Math.max(10, Math.min(40, +slider.value | 0));
-  setStatus('Generating…');
-  // Yield once so the UI updates, then run.
+  const M = DEFAULT_M;
+  // Yield once so the disabled state paints, then run.
   setTimeout(() => {
-    const t0 = performance.now();
     const result = generate(W, H, M);
-    const t1 = performance.now();
     newBtn.disabled = false;
-    if (!result) {
-      setStatus(`No no-guess board found at ${M} mines after ${MAX_ATTEMPTS} attempts.`, 'lose');
-      metaEl.textContent = '';
-      return;
-    }
-    const { board, reveals, attempts } = result;
-    let initial = ZERO, revealed = ZERO;
-    for (const r of reveals) {
-      initial |= bit(r);
-      revealed = revealCell(board, r, revealed, ZERO);
-    }
+    if (!result) return;
+    const { board, reveals } = result;
+    let revealed = ZERO;
+    for (const r of reveals) revealed = revealCell(board, r, revealed, ZERO);
     state = {
       board, totalMines: M,
-      initial, revealed, flagged: ZERO,
+      revealed, flagged: ZERO,
       exploded: -1, over: false,
     };
     buildBoardDom();
     render();
-    metaEl.textContent =
-      `mines: ${M} · initial reveals: ${reveals.length} · ` +
-      `generator attempts: ${attempts} · generated in ${(t1 - t0).toFixed(1)} ms`;
-    setStatus('Tap to reveal · hold to flag.');
   }, 0);
 }
 
