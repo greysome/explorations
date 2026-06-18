@@ -98,6 +98,11 @@
     -webkit-user-select: none;
     user-select: none;
   }
+  /* Glyphs live in a pseudo-element so iOS WebKit's selection engine
+   * has no real text node to latch onto on long-press — without this,
+   * iOS Firefox in particular pops the "Search with Firefox / Find in
+   * Page" callout on numbered cells, flags, and mines. */
+  .cell::before { content: attr(data-glyph); }
   .cell.hidden { background: #4a4e57; }
   .cell.hidden.pressing { background: #5d626d; }
   .cell.revealed { background: #1c1e22; cursor: default; }
@@ -1003,28 +1008,29 @@ function render() {
   for (let i = 0; i < AREA; i++) {
     const el = cells[i];
     el.className = 'cell';
-    el.textContent = '';
+    let glyph = '';
     const isRev  = (revealed & bit(i)) !== ZERO;
     const isFlag = (flagged  & bit(i)) !== ZERO;
     const isMine = (board.mines & bit(i)) !== ZERO;
     if (isRev) {
       if (isMine) {
         el.classList.add('mine');
-        el.textContent = '✱';
+        glyph = '✱';
       } else {
         el.classList.add('revealed');
         const n = board.counts[i];
-        if (n > 0) { el.classList.add('num', 'c' + n); el.textContent = n; }
+        if (n > 0) { el.classList.add('num', 'c' + n); glyph = String(n); }
       }
     } else if (won) {
       // Win indication: every unrevealed cell flips to its mine appearance
       // (all unrevealed cells are mines at this point by definition).
       el.classList.add('mine');
-      el.textContent = '✱';
+      glyph = '✱';
     } else {
       el.classList.add('hidden');
-      if (isFlag) { el.classList.add('flag'); el.textContent = '⚑'; }
+      if (isFlag) { el.classList.add('flag'); glyph = '⚑'; }
     }
+    el.dataset.glyph = glyph;
   }
   mineEl.textContent = state.totalMines - popcount(state.flagged);
 }
