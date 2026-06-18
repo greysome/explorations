@@ -18,7 +18,12 @@
     --flag: #f3c14b;
     --safe: #3c8b48;
   }
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
   html, body {
     margin: 0; padding: 0;
     background: var(--bg); color: var(--text);
@@ -1096,8 +1101,8 @@ boardEl.addEventListener('pointerdown', (e) => {
       press.el.classList.remove('pressing');
       playerFlag(press.i);
       if (navigator.vibrate) { try { navigator.vibrate(18); } catch (_) {} }
-      render();
       checkWin();
+      render();
     }, HOLD_MS),
   };
   // Capture so pointerup outside the cell still resolves the press.
@@ -1122,8 +1127,8 @@ boardEl.addEventListener('pointerup', (e) => {
   } else if ((state.flagged & bit(i)) === ZERO) {
     playerReveal(i);
   }
-  render();
   checkWin();
+  render();
 });
 
 boardEl.addEventListener('pointercancel', () => clearPress());
@@ -1140,8 +1145,8 @@ boardEl.addEventListener('contextmenu', (e) => {
   if (!t) return;
   clearPress();
   playerFlag(+t.dataset.i);
-  render();
   checkWin();
+  render();
 });
 
 /* ------------------------------ controls ---------------------------------- */
