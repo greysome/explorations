@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dense Minesweeper Generator</title>
+<style>
+  :root {
+    --bg: #1e1f22;
+    --panel: #2b2d31;
+    --border: #3a3c41;
+    --text: #e6e6e6;
+    --muted: #9aa0a6;
+    --accent: #5b8def;
+    --mine: #d9534f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 18px;
+    align-items: end;
+    margin-bottom: 18px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .field input[type="number"] {
+    width: 90px;
+    background: #1a1b1e;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: 0;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button.secondary {
+    background: #3a3c41;
+  }
+  button:hover { filter: brightness(1.1); }
+  .stats {
+    color: var(--muted);
+    font-size: 13px;
+    margin-left: auto;
+  }
+  .stats strong { color: var(--text); font-weight: 600; }
+
+  .board-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow: auto;
+  }
+  .board {
+    display: grid;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    width: max-content;
+    margin: 0 auto;
+  }
+  .cell {
+    width: 26px;
+    height: 26px;
+    background: #3a3c41;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    user-select: none;
+    cursor: pointer;
+  }
+  .cell.hidden { background: #4a4d52; }
+  .cell.hidden:hover { background: #565a60; }
+  .cell.revealed { background: #2b2d31; }
+  .cell.mine { background: var(--mine); color: white; }
+  .cell.flag { color: #f0c419; }
+  .c1 { color: #5b8def; }
+  .c2 { color: #5cb85c; }
+  .c3 { color: #ec6464; }
+  .c4 { color: #a06ce4; }
+  .c5 { color: #d9a23a; }
+  .c6 { color: #46c4c4; }
+  .c7 { color: #e6e6e6; }
+  .c8 { color: #aaaaaa; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dense Minesweeper Generator</h1>
+  <div class="subtitle">
+    Generates boards where every non-mine cell has at least one mine neighbor
+    (no <code>0</code> cells), via a forward + backward fixing pass.
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="rows">Rows</label>
+      <input id="rows" type="number" min="3" max="60" value="12" />
+    </div>
+    <div class="field">
+      <label for="cols">Cols</label>
+      <input id="cols" type="number" min="3" max="60" value="16" />
+    </div>
+    <div class="field">
+      <label for="density">Seed density</label>
+      <input id="density" type="number" min="0" max="0.5" step="0.01" value="0.10" />
+    </div>
+    <button id="gen">Generate</button>
+    <button id="reveal" class="secondary">Reveal all</button>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board');
+  const statsEl = $('stats');
+
+  let R = 12, C = 16;
+  let mines = [];     // 2D bool
+  let counts = [];    // 2D int
+  let revealed = [];  // 2D bool
+  let flagged = [];   // 2D bool
+
+  const make2D = (r, c, v) => Array.from({length: r}, () => Array(c).fill(v));
+
+  const neighbors = (r, c) => {
+    const out = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < R && nc >= 0 && nc < C) out.push([nr, nc]);
+      }
+    }
+    return out;
+  };
+
+  const countMineNeighbors = (r, c) => {
+    let n = 0;
+    for (const [nr, nc] of neighbors(r, c)) if (mines[nr][nc]) n++;
+    return n;
+  };
+
+  // Generate a dense board: every non-mine cell has >=1 mine neighbor.
+  // Strategy:
+  //   1. Seed with random mines at the given density.
+  //   2. Forward pass (top-left -> bottom-right): for each non-mine cell with
+  //      zero mine neighbors, place a mine on one of its neighbors. Prefer
+  //      neighbors that come LATER in scan order, so the fix also helps cover
+  //      upcoming cells.
+  //   3. Backward pass (bottom-right -> top-left): same check, preferring
+  //      neighbors that come EARLIER in scan order. This catches any zero
+  //      cells the forward pass missed (e.g. cells whose only candidate
+  //      neighbors were already-fixed mines that left them at zero).
+  const generate = (density) => {
+    mines = make2D(R, C, false);
+
+    // 1. seed
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        if (Math.random() < density) mines[r][c] = true;
+      }
+    }
+
+    const fix = (r, c, preferLater) => {
+      if (mines[r][c]) return;
+      if (countMineNeighbors(r, c) > 0) return;
+      const ns = neighbors(r, c).filter(([nr, nc]) => !mines[nr][nc]);
+      if (ns.length === 0) return; // surrounded by mines already (shouldn't happen)
+      ns.sort((a, b) => {
+        const ka = a[0] * C + a[1], kb = b[0] * C + b[1];
+        return preferLater ? kb - ka : ka - kb;
+      });
+      // small randomness within the preferred half
+      const pick = ns[Math.floor(Math.random() * Math.min(3, ns.length))];
+      mines[pick[0]][pick[1]] = true;
+    };
+
+    // 2. forward
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++)
+        fix(r, c, true);
+
+    // 3. backward
+    for (let r = R - 1; r >= 0; r--)
+      for (let c = C - 1; c >= 0; c--)
+        fix(r, c, false);
+
+    // compute counts
+    counts = make2D(R, C, 0);
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++)
+        counts[r][c] = countMineNeighbors(r, c);
+
+    revealed = make2D(R, C, false);
+    flagged = make2D(R, C, false);
+  };
+
+  const render = () => {
+    boardEl.style.gridTemplateColumns = `repeat(${C}, 26px)`;
+    boardEl.innerHTML = '';
+    let mineCount = 0, zeros = 0;
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        if (mines[r][c]) mineCount++;
+        else if (counts[r][c] === 0) zeros++;
+        const d = document.createElement('div');
+        d.className = 'cell';
+        d.dataset.r = r;
+        d.dataset.c = c;
+        paint(d, r, c);
+        boardEl.appendChild(d);
+      }
+    }
+    const nonMine = R * C - mineCount;
+    statsEl.innerHTML =
+      `<strong>${R}×${C}</strong> · mines <strong>${mineCount}</strong> ` +
+      `(${(mineCount / (R*C) * 100).toFixed(1)}%) · ` +
+      `zero-cells <strong style="color:${zeros ? 'var(--mine)' : 'var(--text)'}">${zeros}</strong>`;
+  };
+
+  const paint = (el, r, c) => {
+    el.classList.remove('hidden','revealed','mine','flag','c1','c2','c3','c4','c5','c6','c7','c8');
+    el.textContent = '';
+    if (!revealed[r][c]) {
+      el.classList.add('hidden');
+      if (flagged[r][c]) { el.classList.add('flag'); el.textContent = '⚑'; }
+      return;
+    }
+    if (mines[r][c]) {
+      el.classList.add('mine');
+      el.textContent = '✱';
+    } else {
+      el.classList.add('revealed');
+      const n = counts[r][c];
+      if (n > 0) { el.classList.add('c' + n); el.textContent = n; }
+    }
+  };
+
+  const repaintCell = (r, c) => {
+    const el = boardEl.children[r * C + c];
+    if (el) paint(el, r, c);
+  };
+
+  boardEl.addEventListener('click', e => {
+    const t = e.target.closest('.cell');
+    if (!t) return;
+    const r = +t.dataset.r, c = +t.dataset.c;
+    if (flagged[r][c]) return;
+    revealed[r][c] = true;
+    repaintCell(r, c);
+  });
+  boardEl.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const t = e.target.closest('.cell');
+    if (!t) return;
+    const r = +t.dataset.r, c = +t.dataset.c;
+    if (revealed[r][c]) return;
+    flagged[r][c] = !flagged[r][c];
+    repaintCell(r, c);
+  });
+
+  $('gen').addEventListener('click', () => {
+    R = Math.max(3, Math.min(60, +$('rows').value || 12));
+    C = Math.max(3, Math.min(60, +$('cols').value || 16));
+    const d = Math.max(0, Math.min(0.5, +$('density').value || 0.1));
+    generate(d);
+    render();
+  });
+  $('reveal').addEventListener('click', () => {
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++)
+        revealed[r][c] = true;
+    render();
+  });
+
+  // initial
+  generate(0.10);
+  render();
+})();
+</script>
+</body>
+</html>
