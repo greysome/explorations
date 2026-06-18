@@ -1040,8 +1040,9 @@ function playerChord(i) {
   const n = state.board.counts[i];
   if (n === 0) return;
   const nm = NEIGH_MASK[i];
-  const flaggedAround = popcount(nm & state.flagged);
-  if (flaggedAround !== n) return;
+  // Revealed mines count as known mines for chording, same as flags.
+  const known = state.flagged | (state.revealed & state.board.mines);
+  if (popcount(nm & known) !== n) return;
   const toReveal = nm & ~state.revealed & ~state.flagged;
   for (const j of bitsOf(toReveal)) playerReveal(j);
 }
