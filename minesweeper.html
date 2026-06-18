@@ -2,334 +2,1304 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Dense Minesweeper Generator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#15171a" />
+<title>Dense Minesweeper</title>
 <style>
   :root {
-    --bg: #1e1f22;
-    --panel: #2b2d31;
-    --border: #3a3c41;
-    --text: #e6e6e6;
-    --muted: #9aa0a6;
+    --bg: #15171a;
+    --panel: #1f2125;
+    --panel2: #2a2d33;
+    --border: #393c43;
+    --text: #ececec;
+    --muted: #8e94a0;
     --accent: #5b8def;
-    --mine: #d9534f;
+    --mine: #e3554f;
+    --flag: #f3c14b;
+    --safe: #3c8b48;
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0;
-    padding: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
   }
   .wrap {
-    max-width: 1100px;
+    max-width: 480px;
     margin: 0 auto;
-    padding: 24px 16px 48px;
+    padding: 18px 14px max(20px, env(safe-area-inset-bottom));
   }
-  h1 {
-    font-size: 20px;
+  header h1 {
+    margin: 0 0 2px;
+    font-size: 18px;
     font-weight: 600;
-    margin: 0 0 4px;
   }
-  .subtitle {
+  header .sub {
     color: var(--muted);
-    font-size: 13px;
-    margin-bottom: 20px;
+    font-size: 12px;
+    margin-bottom: 12px;
   }
-  .controls {
+  .hud {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
+    border-radius: 10px;
+    padding: 10px 12px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 14px 18px;
-    align-items: end;
-    margin-bottom: 18px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
   }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .field label {
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .field input[type="number"] {
-    width: 90px;
-    background: #1a1b1e;
-    color: var(--text);
+  .mine-counter {
+    background: #0e0f12;
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 8px;
-    font-size: 14px;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--flag);
+    min-width: 58px;
+    text-align: center;
   }
+  .status {
+    flex: 1;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+  .status.win  { color: #6fcf76; }
+  .status.lose { color: var(--mine); }
   button {
     background: var(--accent);
     color: white;
     border: 0;
-    border-radius: 4px;
-    padding: 8px 14px;
-    font-size: 14px;
-    cursor: pointer;
-    font-weight: 500;
-  }
-  button.secondary {
-    background: #3a3c41;
-  }
-  button:hover { filter: brightness(1.1); }
-  .stats {
-    color: var(--muted);
+    border-radius: 6px;
+    padding: 9px 14px;
     font-size: 13px;
-    margin-left: auto;
+    font-weight: 600;
+    cursor: pointer;
   }
-  .stats strong { color: var(--text); font-weight: 600; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
 
-  .board-wrap {
+  .slider-row {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    overflow: auto;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
   }
+  .slider-row label { color: var(--muted); }
+  .slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .slider-row .val {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    min-width: 28px;
+    text-align: right;
+  }
+
   .board {
     display: grid;
-    gap: 1px;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
     background: var(--border);
     border: 1px solid var(--border);
-    width: max-content;
-    margin: 0 auto;
+    border-radius: 6px;
+    padding: 2px;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    user-select: none;
+    touch-action: manipulation;
   }
   .cell {
-    width: 26px;
-    height: 26px;
-    background: #3a3c41;
+    background: var(--panel2);
+    border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
-    font-weight: 600;
-    user-select: none;
+    font-weight: 700;
+    font-size: clamp(15px, 4.6vw, 24px);
     cursor: pointer;
+    transition: background 80ms;
+    position: relative;
   }
-  .cell.hidden { background: #4a4d52; }
-  .cell.hidden:hover { background: #565a60; }
-  .cell.revealed { background: #2b2d31; }
+  .cell.hidden { background: #4a4e57; }
+  .cell.hidden.pressing { background: #5d626d; }
+  .cell.revealed { background: #1c1e22; cursor: default; }
+  .cell.revealed.num { cursor: pointer; }
+  .cell.flag { color: var(--flag); }
   .cell.mine { background: var(--mine); color: white; }
-  .cell.flag { color: #f0c419; }
+  .cell.mine.exploded { background: #ff7066; }
+  .cell.initial::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1.5px var(--safe);
+    pointer-events: none;
+  }
   .c1 { color: #5b8def; }
-  .c2 { color: #5cb85c; }
-  .c3 { color: #ec6464; }
-  .c4 { color: #a06ce4; }
-  .c5 { color: #d9a23a; }
-  .c6 { color: #46c4c4; }
-  .c7 { color: #e6e6e6; }
-  .c8 { color: #aaaaaa; }
+  .c2 { color: #6fcf76; }
+  .c3 { color: #e3554f; }
+  .c4 { color: #a07ce8; }
+  .c5 { color: #d99841; }
+  .c6 { color: #4dc4c4; }
+  .c7 { color: #ececec; }
+  .c8 { color: #999; }
+
+  .meta {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+  footer {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  footer kbd {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+    font-family: inherit;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Dense Minesweeper Generator</h1>
-  <div class="subtitle">
-    Generates boards where every non-mine cell has at least one mine neighbor
-    (no <code>0</code> cells), via a forward + backward fixing pass.
+  <header>
+    <h1>Dense Minesweeper</h1>
+    <div class="sub">No-guess 8×8 boards. Tap to reveal or chord, press-and-hold to flag.</div>
+  </header>
+
+  <div class="hud">
+    <div class="mine-counter" id="mineCount">0</div>
+    <div class="status" id="status">Tap to reveal · hold to flag.</div>
+    <button id="newBoard">New</button>
   </div>
 
-  <div class="controls">
-    <div class="field">
-      <label for="rows">Rows</label>
-      <input id="rows" type="number" min="3" max="60" value="12" />
-    </div>
-    <div class="field">
-      <label for="cols">Cols</label>
-      <input id="cols" type="number" min="3" max="60" value="16" />
-    </div>
-    <div class="field">
-      <label for="density">Seed density</label>
-      <input id="density" type="number" min="0" max="0.5" step="0.01" value="0.10" />
-    </div>
-    <button id="gen">Generate</button>
-    <button id="reveal" class="secondary">Reveal all</button>
-    <div class="stats" id="stats"></div>
+  <div class="slider-row">
+    <label for="mineSlider">Mines</label>
+    <input id="mineSlider" type="range" min="10" max="40" value="26" />
+    <div class="val" id="mineSliderVal">26</div>
   </div>
 
-  <div class="board-wrap">
-    <div class="board" id="board"></div>
-  </div>
+  <div class="board" id="board"></div>
+
+  <div class="meta" id="meta"></div>
+
+  <footer>
+    <kbd>Tap</kbd> hidden cell → reveal &nbsp;·&nbsp;
+    <kbd>Tap</kbd> revealed number → chord &nbsp;·&nbsp;
+    <kbd>Hold</kbd> → toggle flag.
+    Cells outlined in green are the solver-chosen opening reveals.
+  </footer>
 </div>
 
 <script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const boardEl = $('board');
-  const statsEl = $('stats');
+"use strict";
+/* ============================================================================
+ * Dense Minesweeper — JS port of `claude/minesweeper-logic-generator-6qlbm`.
+ *
+ * The Python prototype in that branch:
+ *   - generates dense layouts via a swap-redundant-mines loop
+ *     (`make_boards.py: pregenerate_dense_board`, itself a port of
+ *      `gen_board.c`);
+ *   - runs a two-phase no-guess solver:
+ *       1. trivial constraint propagation;
+ *       2. per-connected-component DPLL-style DFS enumeration of all
+ *          satisfying assignments, then convolves per-component
+ *          mine-total distributions and weights by C(I, R - sum t)
+ *          (the global mine budget over the hidden interior) to derive
+ *          cells whose mine probability is forced to 0 or 1.
+ *   - picks an opening reveal set via a forward greedy pass
+ *     (`build_reveal_set`) and a backward minimize pass (`minimize`).
+ *
+ * This file ports all of that into JavaScript and wraps it in a mobile-first
+ * UI: tap to reveal/chord, press-and-hold to flag.
+ *
+ * 8×8 boards fit in 64 bits, so bitsets are BigInts. Per-cell neighbor masks
+ * are precomputed.
+ * ========================================================================= */
 
-  let R = 12, C = 16;
-  let mines = [];     // 2D bool
-  let counts = [];    // 2D int
-  let revealed = [];  // 2D bool
-  let flagged = [];   // 2D bool
+/* -------------------------------------------------------------------------- *
+ * Configuration                                                              *
+ * -------------------------------------------------------------------------- */
 
-  const make2D = (r, c, v) => Array.from({length: r}, () => Array(c).fill(v));
+const W = 8, H = 8;
+const AREA = W * H;
+const MAX_ATTEMPTS = 500;        // matches Python's default --max-attempts
+const SAMPLE_K     = 8;          // build_reveal_set: candidates sampled per step
+const LEAF_CAP     = 50_000;     // per-component DFS leaf cap (matches Python)
+const NODE_CAP     = 400_000;    // per-component DFS node-visit cap
+const HOLD_MS      = 220;        // press-and-hold threshold for flag gesture
+const VERBOSE      = false;
 
-  const neighbors = (r, c) => {
-    const out = [];
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if (!dr && !dc) continue;
-        const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < R && nc >= 0 && nc < C) out.push([nr, nc]);
+const SOLVED = 'SOLVED', STUCK = 'STUCK', CONTRADICTION = 'CONTRADICTION';
+
+/* -------------------------------------------------------------------------- *
+ * Bitmask helpers (BigInt up to 64 bits)                                     *
+ * -------------------------------------------------------------------------- */
+
+const ZERO = 0n;
+const ONE  = 1n;
+const ALL_AREA = (ONE << BigInt(AREA)) - ONE;
+
+const bit = (i) => ONE << BigInt(i);
+
+function popcount(x) {
+  // 8-bit chunked Kernighan. Fast for small BigInts (≤64 bits).
+  let c = 0;
+  while (x) {
+    let v = Number(x & 0xFFn);
+    while (v) { c++; v &= v - 1; }
+    x >>= 8n;
+  }
+  return c;
+}
+
+function bitsOf(mask) {
+  const out = [];
+  let m = mask, i = 0;
+  while (m) {
+    if (m & ONE) out.push(i);
+    m >>= ONE;
+    i++;
+  }
+  return out;
+}
+
+function lowestBitIndex(mask) {
+  // mask is non-zero. Returns the index of its lowest set bit.
+  let i = 0;
+  while ((mask & ONE) === ZERO) { mask >>= ONE; i++; }
+  return i;
+}
+
+/* Binomial coefficient as BigInt (exact). */
+function comb(n, k) {
+  if (k < 0 || k > n) return ZERO;
+  if (k === 0 || k === n) return ONE;
+  if (k > n - k) k = n - k;
+  let num = ONE, den = ONE;
+  for (let i = 0; i < k; i++) {
+    num *= BigInt(n - i);
+    den *= BigInt(i + 1);
+  }
+  return num / den;
+}
+
+/* -------------------------------------------------------------------------- *
+ * Neighbors                                                                  *
+ * -------------------------------------------------------------------------- */
+
+/* NEIGH_LIST[i]  — number[] of 8-neighbor indices (no self)                  */
+/* NEIGH_MASK[i]  — BigInt mask of the same                                   */
+/* ADJ9[i][d]     — port of `adjacent_square` (d ∈ 0..8; d=4 is self;         */
+/*                  out-of-bounds = -1). Used by pregenerateDenseBoard.       */
+
+const NEIGH_LIST = new Array(AREA);
+const NEIGH_MASK = new Array(AREA);
+const ADJ9       = new Array(AREA);
+
+(function precomputeNeighbors() {
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < W; c++) {
+      const i = r * W + c;
+      const list = [];
+      let mask = ZERO;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
+          const j = nr * W + nc;
+          list.push(j);
+          mask |= bit(j);
+        }
+      }
+      NEIGH_LIST[i] = list;
+      NEIGH_MASK[i] = mask;
+
+      const adj = new Int16Array(9).fill(-1);
+      adj[0] = (c > 0   && r > 0)     ? i - W - 1 : -1;
+      adj[1] = (r > 0)                ? i - W     : -1;
+      adj[2] = (c < W-1 && r > 0)     ? i - W + 1 : -1;
+      adj[3] = (c > 0)                ? i - 1     : -1;
+      adj[4] = i;
+      adj[5] = (c < W-1)              ? i + 1     : -1;
+      adj[6] = (c > 0   && r < H-1)   ? i + W - 1 : -1;
+      adj[7] = (r < H-1)              ? i + W     : -1;
+      adj[8] = (c < W-1 && r < H-1)   ? i + W + 1 : -1;
+      ADJ9[i] = adj;
+    }
+  }
+})();
+
+/* -------------------------------------------------------------------------- *
+ * Seeded RNG                                                                 *
+ * -------------------------------------------------------------------------- */
+
+function mulberry32(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const randrange = (rng, n) => Math.floor(rng() * n);
+function choice(rng, arr) { return arr[randrange(rng, arr.length)]; }
+function sample(rng, arr, k) {
+  if (k >= arr.length) return arr.slice();
+  const a = arr.slice();
+  for (let i = 0; i < k; i++) {
+    const j = i + randrange(rng, a.length - i);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, k);
+}
+
+/* -------------------------------------------------------------------------- *
+ * Dense board layout (port of `pregenerate_dense_board`)                     *
+ * -------------------------------------------------------------------------- */
+
+function pregenerateDenseBoard(rng, w, h, M, maxUncovered = 0) {
+  const area = w * h;
+  const coveredCounts = new Int32Array(area);
+  const mines = [];
+
+  // Reservoir-style placement: walk every square, place a mine here with
+  // probability (mines_left / squares_left). At each placement, bump the
+  // 9-square coverage (including self via d=4).
+  for (let sq = 0; sq < area; sq++) {
+    if (mines.length === M) break;
+    if (randrange(rng, area - sq) < M - mines.length) {
+      mines.push(sq);
+      for (let d = 0; d < 9; d++) {
+        const adj = ADJ9[sq][d];
+        if (adj >= 0) coveredCounts[adj]++;
       }
     }
-    return out;
-  };
+  }
 
-  const countMineNeighbors = (r, c) => {
+  // Swap-redundant loop: while any cell is uncovered, pretend to cover
+  // an uncovered square; then look for a "redundant" mine (one whose 9-cell
+  // coverage all has count >= 2) and move it onto the uncovered square.
+  // If no redundant mine exists, the +1 we added still drops the uncovered
+  // cell out of the list (its self-coverage counts), so the loop still
+  // terminates. The downstream solver is the real arbiter of "dense enough".
+  let safety = area * 8;
+  while (safety-- > 0) {
+    const uncovered = [];
+    for (let sq = 0; sq < area; sq++) {
+      if (coveredCounts[sq] === 0) uncovered.push(sq);
+    }
+    if (uncovered.length <= maxUncovered) break;
+    const uSq = choice(rng, uncovered);
+    for (let d = 0; d < 9; d++) {
+      const adj = ADJ9[uSq][d];
+      if (adj >= 0) coveredCounts[adj]++;
+    }
+    for (let mi = 0; mi < mines.length; mi++) {
+      const mSq = mines[mi];
+      let redundant = true;
+      for (let d = 0; d < 9; d++) {
+        const adj = ADJ9[mSq][d];
+        if (adj >= 0 && coveredCounts[adj] === 1) { redundant = false; break; }
+      }
+      if (redundant) {
+        for (let d = 0; d < 9; d++) {
+          const adj = ADJ9[mSq][d];
+          if (adj >= 0) coveredCounts[adj]--;
+        }
+        mines[mi] = uSq;
+        break;
+      }
+    }
+  }
+  return mines;
+}
+
+/* -------------------------------------------------------------------------- *
+ * Board                                                                      *
+ * -------------------------------------------------------------------------- */
+
+function makeBoardFromMines(w, h, mineList) {
+  let mines = ZERO;
+  for (const i of mineList) mines |= bit(i);
+  const counts = new Int8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
     let n = 0;
-    for (const [nr, nc] of neighbors(r, c)) if (mines[nr][nc]) n++;
-    return n;
-  };
+    const nm = NEIGH_LIST[i];
+    for (let k = 0; k < nm.length; k++) {
+      if ((mines >> BigInt(nm[k])) & ONE) n++;
+    }
+    counts[i] = n;
+  }
+  return { w, h, mines, counts, area: w * h };
+}
 
-  // Generate a dense board: every non-mine cell has >=1 mine neighbor.
-  // Strategy:
-  //   1. Seed with random mines at the given density.
-  //   2. Forward pass (top-left -> bottom-right): for each non-mine cell with
-  //      zero mine neighbors, place a mine on one of its neighbors. Prefer
-  //      neighbors that come LATER in scan order, so the fix also helps cover
-  //      upcoming cells.
-  //   3. Backward pass (bottom-right -> top-left): same check, preferring
-  //      neighbors that come EARLIER in scan order. This catches any zero
-  //      cells the forward pass missed (e.g. cells whose only candidate
-  //      neighbors were already-fixed mines that left them at zero).
-  const generate = (density) => {
-    mines = make2D(R, C, false);
+/* -------------------------------------------------------------------------- *
+ * Reveal helpers (`_reveal_cell` + cascade)                                  *
+ *                                                                            *
+ * Dense boards never produce 0-cells, but the cascade is preserved so the    *
+ * solver and the UI work correctly on the (rare) edge case and on any       *
+ * non-dense board generated with maxUncovered > 0.                           *
+ * -------------------------------------------------------------------------- */
 
-    // 1. seed
-    for (let r = 0; r < R; r++) {
-      for (let c = 0; c < C; c++) {
-        if (Math.random() < density) mines[r][c] = true;
+function revealCell(board, i, revealed, flagged) {
+  if ((board.mines >> BigInt(i)) & ONE) {
+    throw new Error(`tried to reveal mine at ${i}`);
+  }
+  if (board.counts[i] !== 0) return revealed | bit(i);
+  const q = [i];
+  while (q.length) {
+    const c = q.shift();
+    const cb = bit(c);
+    if (revealed & cb) continue;
+    revealed |= cb;
+    if (board.counts[c] === 0) {
+      const nm = NEIGH_LIST[c];
+      for (let k = 0; k < nm.length; k++) {
+        const j = nm[k];
+        const jb = bit(j);
+        if (!(revealed & jb) && !(flagged & jb)) q.push(j);
       }
     }
+  }
+  return revealed;
+}
 
-    const fix = (r, c, preferLater) => {
-      if (mines[r][c]) return;
-      if (countMineNeighbors(r, c) > 0) return;
-      const ns = neighbors(r, c).filter(([nr, nc]) => !mines[nr][nc]);
-      if (ns.length === 0) return; // surrounded by mines already (shouldn't happen)
-      ns.sort((a, b) => {
-        const ka = a[0] * C + a[1], kb = b[0] * C + b[1];
-        return preferLater ? kb - ka : ka - kb;
-      });
-      // small randomness within the preferred half
-      const pick = ns[Math.floor(Math.random() * Math.min(3, ns.length))];
-      mines[pick[0]][pick[1]] = true;
-    };
+/* -------------------------------------------------------------------------- *
+ * Logging                                                                    *
+ * -------------------------------------------------------------------------- */
 
-    // 2. forward
-    for (let r = 0; r < R; r++)
-      for (let c = 0; c < C; c++)
-        fix(r, c, true);
-
-    // 3. backward
-    for (let r = R - 1; r >= 0; r--)
-      for (let c = C - 1; c >= 0; c--)
-        fix(r, c, false);
-
-    // compute counts
-    counts = make2D(R, C, 0);
-    for (let r = 0; r < R; r++)
-      for (let c = 0; c < C; c++)
-        counts[r][c] = countMineNeighbors(r, c);
-
-    revealed = make2D(R, C, false);
-    flagged = make2D(R, C, false);
+function makeLog() {
+  return {
+    trivialRounds: 0,
+    trivialDeductions: 0,
+    enumRounds: 0,
+    enumDeductions: 0,
+    maxComponentSize: 0,
+    globalCountDecisive: false,
   };
+}
 
-  const render = () => {
-    boardEl.style.gridTemplateColumns = `repeat(${C}, 26px)`;
-    boardEl.innerHTML = '';
-    let mineCount = 0, zeros = 0;
-    for (let r = 0; r < R; r++) {
-      for (let c = 0; c < C; c++) {
-        if (mines[r][c]) mineCount++;
-        else if (counts[r][c] === 0) zeros++;
-        const d = document.createElement('div');
-        d.className = 'cell';
-        d.dataset.r = r;
-        d.dataset.c = c;
-        paint(d, r, c);
-        boardEl.appendChild(d);
+/* -------------------------------------------------------------------------- *
+ * Solver — Phase 1: trivial propagation (`_trivial_pass`)                    *
+ * -------------------------------------------------------------------------- */
+
+function trivialPass(board, revealed, flagged, log) {
+  const counts = board.counts;
+  let changedAnyRound = false;
+  while (true) {
+    let changed = false;
+    log.trivialRounds++;
+    // Snapshot the revealed mask so concurrent reveals during this round
+    // don't perturb iteration order (mirrors Python's generator semantics).
+    const snapshot = bitsOf(revealed);
+    for (const i of snapshot) {
+      const n = counts[i];
+      if (n === 0) continue;
+      const nm = NEIGH_LIST[i];
+      let hiddenBits = ZERO;
+      let flaggedCount = 0;
+      for (let k = 0; k < nm.length; k++) {
+        const j = nm[k];
+        const jb = bit(j);
+        if (flagged & jb) flaggedCount++;
+        else if (!(revealed & jb)) hiddenBits |= jb;
+      }
+      if (hiddenBits === ZERO) continue;
+      const need = n - flaggedCount;
+      const numHidden = popcount(hiddenBits);
+      if (need < 0 || need > numHidden) {
+        return { revealed, flagged, contradiction: true };
+      }
+      if (need === 0) {
+        for (const j of bitsOf(hiddenBits)) {
+          if (!(revealed & bit(j))) {
+            revealed = revealCell(board, j, revealed, flagged);
+            log.trivialDeductions++;
+            changed = true;
+          }
+        }
+      } else if (need === numHidden) {
+        flagged |= hiddenBits;
+        log.trivialDeductions += numHidden;
+        changed = true;
       }
     }
-    const nonMine = R * C - mineCount;
-    statsEl.innerHTML =
-      `<strong>${R}×${C}</strong> · mines <strong>${mineCount}</strong> ` +
-      `(${(mineCount / (R*C) * 100).toFixed(1)}%) · ` +
-      `zero-cells <strong style="color:${zeros ? 'var(--mine)' : 'var(--text)'}">${zeros}</strong>`;
-  };
+    if (!changed) break;
+    changedAnyRound = true;
+  }
+  if (!changedAnyRound) log.trivialRounds--;
+  return { revealed, flagged, contradiction: false };
+}
 
-  const paint = (el, r, c) => {
-    el.classList.remove('hidden','revealed','mine','flag','c1','c2','c3','c4','c5','c6','c7','c8');
-    el.textContent = '';
-    if (!revealed[r][c]) {
-      el.classList.add('hidden');
-      if (flagged[r][c]) { el.classList.add('flag'); el.textContent = '⚑'; }
+/* -------------------------------------------------------------------------- *
+ * Solver — Frontier construction + connected-component split                 *
+ * -------------------------------------------------------------------------- */
+
+function buildFrontier(board, revealed, flagged) {
+  const counts = board.counts;
+  const frontier = new Set();
+  const constraints = []; // each: { need, cells: number[] }
+  for (const i of bitsOf(revealed)) {
+    if (counts[i] === 0) continue;
+    const nm = NEIGH_LIST[i];
+    let flaggedCount = 0;
+    const hiddenNeighbors = [];
+    for (let k = 0; k < nm.length; k++) {
+      const j = nm[k];
+      const jb = bit(j);
+      if (flagged & jb) flaggedCount++;
+      else if (!(revealed & jb)) hiddenNeighbors.push(j);
+    }
+    if (hiddenNeighbors.length > 0) {
+      const need = counts[i] - flaggedCount;
+      constraints.push({ need, cells: hiddenNeighbors });
+      for (const c of hiddenNeighbors) frontier.add(c);
+    }
+  }
+  return { frontier, constraints };
+}
+
+function splitComponents(frontier, constraints) {
+  // Union-find on frontier cells linked through shared constraints.
+  const parent = new Map();
+  for (const c of frontier) parent.set(c, c);
+  function find(x) {
+    while (parent.get(x) !== x) {
+      parent.set(x, parent.get(parent.get(x)));
+      x = parent.get(x);
+    }
+    return x;
+  }
+  function union(a, b) {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+  for (const con of constraints) {
+    const cs = con.cells;
+    for (let k = 1; k < cs.length; k++) union(cs[0], cs[k]);
+  }
+  const groups = new Map();   // root -> Set of cells
+  for (const c of frontier) {
+    const r = find(c);
+    if (!groups.has(r)) groups.set(r, new Set());
+    groups.get(r).add(c);
+  }
+  const compCons = new Map(); // root -> constraints[]
+  for (const r of groups.keys()) compCons.set(r, []);
+  for (const con of constraints) {
+    const r = find(con.cells[0]);
+    compCons.get(r).push(con);
+  }
+  const out = [];
+  for (const [r, cells] of groups) {
+    out.push({ cells: [...cells].sort((a, b) => a - b), constraints: compCons.get(r) });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- *
+ * Solver — Per-component DPLL-style enumeration (`_enumerate_component`)     *
+ *                                                                            *
+ * Cell positions are 0..k-1 (within the component). Per-constraint state is  *
+ * stored as:                                                                 *
+ *   consNeed[ci]  : number — remaining mines required                        *
+ *   consUn[ci]    : BigInt — bitmask of unassigned positions in this con     *
+ * which lets unit-propagation forcing be detected in O(ncons) with cheap     *
+ * BigInt bitops (popcount of the unassigned mask, lowestBitIndex for forced  *
+ * cell pick).                                                                *
+ *                                                                            *
+ * Returns:                                                                   *
+ *   { perTotalCellCounts: Map<total, Int32Array(k)>,  // mines-per-cell at   *
+ *     perTotalLeaves:     Map<total, number> }        // leaves with t mines *
+ * or { perTotalCellCounts: null, perTotalLeaves: null } if a cap was hit.    *
+ * -------------------------------------------------------------------------- */
+
+function enumerateComponent(cells, constraints) {
+  const k = cells.length;
+  if (k === 0) {
+    return { perTotalCellCounts: new Map(), perTotalLeaves: new Map() };
+  }
+  const posOf = new Map();
+  for (let i = 0; i < k; i++) posOf.set(cells[i], i);
+
+  const ncons = constraints.length;
+  const consNeed = new Int32Array(ncons);
+  const consUn   = new Array(ncons);
+  for (let ci = 0; ci < ncons; ci++) {
+    consNeed[ci] = constraints[ci].need;
+    let mask = ZERO;
+    for (const c of constraints[ci].cells) mask |= bit(posOf.get(c));
+    consUn[ci] = mask;
+  }
+
+  const consOfCell = new Array(k);
+  for (let p = 0; p < k; p++) {
+    const list = [];
+    const pb = bit(p);
+    for (let ci = 0; ci < ncons; ci++) {
+      if (consUn[ci] & pb) list.push(ci);
+    }
+    consOfCell[p] = list;
+  }
+
+  // Most-constrained-first variable order.
+  const order = new Array(k);
+  for (let i = 0; i < k; i++) order[i] = i;
+  order.sort((a, b) => consOfCell[b].length - consOfCell[a].length);
+
+  const assignment = new Int8Array(k).fill(-1); // -1 unassigned, 0 safe, 1 mine
+  const perTotalCellCounts = new Map();
+  const perTotalLeaves     = new Map();
+  let leaves = 0;
+  let nodes  = 0;
+  let capped = false;
+
+  // Per-call undo arrays (max length = neighbors per cell ≤ 8 on an 8x8 grid).
+  function doAssign(cell, value) {
+    assignment[cell] = value;
+    const cellBit = bit(cell);
+    const undo = [];
+    const cocs = consOfCell[cell];
+    for (let k2 = 0; k2 < cocs.length; k2++) {
+      const ci = cocs[k2];
+      if (consUn[ci] & cellBit) {
+        consUn[ci] &= ~cellBit;
+        if (value === 1) consNeed[ci]--;
+        undo.push(ci);
+      }
+    }
+    return undo;
+  }
+  function doUnassign(cell, value, undo) {
+    const cellBit = bit(cell);
+    for (let k2 = 0; k2 < undo.length; k2++) {
+      const ci = undo[k2];
+      consUn[ci] |= cellBit;
+      if (value === 1) consNeed[ci]++;
+    }
+    assignment[cell] = -1;
+  }
+  function consistent() {
+    for (let ci = 0; ci < ncons; ci++) {
+      const need = consNeed[ci];
+      const un = consUn[ci];
+      const unSize = popcount(un);
+      if (need < 0 || need > unSize) return false;
+      if (unSize === 0 && need !== 0) return false;
+    }
+    return true;
+  }
+  function recordLeaf() {
+    leaves++;
+    if (leaves > LEAF_CAP) { capped = true; return; }
+    let total = 0;
+    for (let i = 0; i < k; i++) if (assignment[i] === 1) total++;
+    let arr = perTotalCellCounts.get(total);
+    if (!arr) {
+      arr = new Int32Array(k);
+      perTotalCellCounts.set(total, arr);
+      perTotalLeaves.set(total, 0);
+    }
+    perTotalLeaves.set(total, perTotalLeaves.get(total) + 1);
+    for (let i = 0; i < k; i++) if (assignment[i] === 1) arr[i]++;
+  }
+  // The recursive DFS is shaped exactly like the Python: detect a forced
+  // assignment from any constraint first (unit propagation); otherwise pick
+  // the next unassigned in `order` and branch on (mine, safe).
+  function dfs() {
+    if (capped) return;
+    nodes++;
+    if (nodes > NODE_CAP) { capped = true; return; }
+
+    // Find a forced assignment.
+    let forcedCell = -1, forcedVal = 0;
+    for (let ci = 0; ci < ncons; ci++) {
+      const un = consUn[ci];
+      if (un === ZERO) continue;
+      const need = consNeed[ci];
+      if (need === 0) {
+        forcedCell = lowestBitIndex(un); forcedVal = 0; break;
+      }
+      if (need === popcount(un)) {
+        forcedCell = lowestBitIndex(un); forcedVal = 1; break;
+      }
+    }
+    if (forcedCell >= 0) {
+      const undo = doAssign(forcedCell, forcedVal);
+      if (consistent()) dfs();
+      doUnassign(forcedCell, forcedVal, undo);
       return;
     }
-    if (mines[r][c]) {
-      el.classList.add('mine');
-      el.textContent = '✱';
-    } else {
-      el.classList.add('revealed');
-      const n = counts[r][c];
-      if (n > 0) { el.classList.add('c' + n); el.textContent = n; }
+
+    // No forced assignment — branch on next unassigned in `order`.
+    let branchCell = -1;
+    for (let oi = 0; oi < order.length; oi++) {
+      if (assignment[order[oi]] === -1) { branchCell = order[oi]; break; }
     }
+    if (branchCell < 0) { recordLeaf(); return; }
+    for (const value of [1, 0]) {
+      const undo = doAssign(branchCell, value);
+      if (consistent()) {
+        dfs();
+        if (capped) { doUnassign(branchCell, value, undo); return; }
+      }
+      doUnassign(branchCell, value, undo);
+    }
+  }
+  dfs();
+  if (capped) return { perTotalCellCounts: null, perTotalLeaves: null };
+  return { perTotalCellCounts, perTotalLeaves };
+}
+
+/* -------------------------------------------------------------------------- *
+ * Solver — Phase 2: frontier pass (`_frontier_pass`)                         *
+ *                                                                            *
+ * Convolve per-component mine-total distributions and weight by              *
+ * C(interior_size, R − sum t). A cell is forced safe when its mine-weight    *
+ * across all weighted-nonzero combinations is 0; forced mine when it equals  *
+ * the global normalizer Z. Interior cells are derived from the global        *
+ * remaining-mines budget alone.                                              *
+ * -------------------------------------------------------------------------- */
+
+function frontierPass(board, revealed, flagged, M, log) {
+  const { frontier, constraints } = buildFrontier(board, revealed, flagged);
+  if (frontier.size === 0 || constraints.length === 0) {
+    return { revealed, flagged, changed: false, status: null };
+  }
+  const components = splitComponents(frontier, constraints);
+
+  // Enumerate each component.
+  const perComp = []; // { cells, perTotalCellCounts, perTotalLeaves }
+  for (const comp of components) {
+    if (comp.cells.length > log.maxComponentSize) {
+      log.maxComponentSize = comp.cells.length;
+    }
+    const res = enumerateComponent(comp.cells, comp.constraints);
+    if (res.perTotalCellCounts === null) {
+      return { revealed, flagged, changed: false, status: STUCK };
+    }
+    if (res.perTotalLeaves.size === 0) {
+      return { revealed, flagged, changed: false, status: CONTRADICTION };
+    }
+    perComp.push({ cells: comp.cells, ...res });
+  }
+
+  // Interior = hidden ∧ not on frontier.
+  const occupied = revealed | flagged;
+  const hiddenAll = ALL_AREA & ~occupied;
+  let frontierBits = ZERO;
+  for (const c of frontier) frontierBits |= bit(c);
+  const interiorBits = hiddenAll & ~frontierBits;
+  const I = popcount(interiorBits);
+  const R = M - popcount(flagged);
+
+  // Full convolution of per-component leaf-count distributions (as BigInts).
+  const compLeavesBig = perComp.map(pc => {
+    const m = new Map();
+    for (const [t, w] of pc.perTotalLeaves) m.set(t, BigInt(w));
+    return m;
+  });
+
+  let full = new Map([[0, ONE]]);
+  for (const d of compLeavesBig) {
+    const next = new Map();
+    for (const [t1, w1] of full) {
+      for (const [t2, w2] of d) {
+        const t = t1 + t2;
+        next.set(t, (next.get(t) || ZERO) + w1 * w2);
+      }
+    }
+    full = next;
+  }
+
+  // Normalizer Z = Σ full[t] · C(I, R − t).
+  let Z = ZERO;
+  for (const [t, w] of full) {
+    const rem = R - t;
+    if (rem >= 0 && rem <= I) Z += w * comb(I, rem);
+  }
+  if (Z === ZERO) return { revealed, flagged, changed: false, status: CONTRADICTION };
+
+  // Interior decisive checks.
+  let interiorAllSafe = true, interiorAllMine = true, anyNonzero = false;
+  for (const [t, w] of full) {
+    const rem = R - t;
+    if (rem < 0 || rem > I) continue;
+    if (w === ZERO) continue;
+    anyNonzero = true;
+    if (rem !== 0) interiorAllSafe = false;
+    if (rem !== I) interiorAllMine = false;
+  }
+  if (!anyNonzero) return { revealed, flagged, changed: false, status: CONTRADICTION };
+
+  let changed = false;
+
+  if (I > 0) {
+    if (interiorAllSafe) {
+      log.globalCountDecisive = true;
+      for (const c of bitsOf(interiorBits)) {
+        if (!(revealed & bit(c))) {
+          revealed = revealCell(board, c, revealed, flagged);
+          log.enumDeductions++; changed = true;
+        }
+      }
+    } else if (interiorAllMine) {
+      log.globalCountDecisive = true;
+      for (const c of bitsOf(interiorBits)) {
+        if (!(flagged & bit(c))) {
+          flagged |= bit(c);
+          log.enumDeductions++; changed = true;
+        }
+      }
+    }
+  }
+
+  // Per-component per-cell mine-weight check.
+  for (let j = 0; j < perComp.length; j++) {
+    // Convolve leaf distributions of all components except j.
+    let others = new Map([[0, ONE]]);
+    for (let kk = 0; kk < compLeavesBig.length; kk++) {
+      if (kk === j) continue;
+      const d = compLeavesBig[kk];
+      const next = new Map();
+      for (const [t1, w1] of others) {
+        for (const [t2, w2] of d) {
+          const t = t1 + t2;
+          next.set(t, (next.get(t) || ZERO) + w1 * w2);
+        }
+      }
+      others = next;
+    }
+    const pc = perComp[j];
+    for (let cellPos = 0; cellPos < pc.cells.length; cellPos++) {
+      const cellIdx = pc.cells[cellPos];
+      const cellBit = bit(cellIdx);
+      let mineW = ZERO;
+      for (const [tJ, countsArr] of pc.perTotalCellCounts) {
+        const cnt = countsArr[cellPos];
+        if (cnt === 0) continue;
+        const cntBig = BigInt(cnt);
+        for (const [tO, wO] of others) {
+          const rem = R - tJ - tO;
+          if (rem >= 0 && rem <= I) {
+            mineW += cntBig * wO * comb(I, rem);
+          }
+        }
+      }
+      if (mineW === ZERO) {
+        if (!(revealed & cellBit)) {
+          revealed = revealCell(board, cellIdx, revealed, flagged);
+          log.enumDeductions++; changed = true;
+        }
+      } else if (mineW === Z) {
+        if (!(flagged & cellBit)) {
+          flagged |= cellBit;
+          log.enumDeductions++; changed = true;
+        }
+      }
+    }
+  }
+  if (changed) log.enumRounds++;
+  return { revealed, flagged, changed, status: null };
+}
+
+/* -------------------------------------------------------------------------- *
+ * Solver — top-level fixpoint                                                *
+ * -------------------------------------------------------------------------- */
+
+function solve(board, revealed, flagged, M) {
+  const log = makeLog();
+  let r0 = trivialPass(board, revealed, flagged, log);
+  if (r0.contradiction) return { revealed: r0.revealed, flagged: r0.flagged, status: CONTRADICTION, log };
+  revealed = r0.revealed; flagged = r0.flagged;
+
+  const safeMask = ALL_AREA & ~board.mines;
+  while (true) {
+    if ((revealed & safeMask) === safeMask) {
+      return { revealed, flagged, status: SOLVED, log };
+    }
+    const fp = frontierPass(board, revealed, flagged, M, log);
+    if (fp.status === STUCK)         return { revealed: fp.revealed, flagged: fp.flagged, status: STUCK, log };
+    if (fp.status === CONTRADICTION) return { revealed: fp.revealed, flagged: fp.flagged, status: CONTRADICTION, log };
+    if (!fp.changed)                 return { revealed: fp.revealed, flagged: fp.flagged, status: STUCK, log };
+    revealed = fp.revealed; flagged = fp.flagged;
+
+    const r = trivialPass(board, revealed, flagged, log);
+    if (r.contradiction) return { revealed: r.revealed, flagged: r.flagged, status: CONTRADICTION, log };
+    revealed = r.revealed; flagged = r.flagged;
+  }
+}
+
+/* -------------------------------------------------------------------------- *
+ * Reveal-set search (`build_reveal_set` + `minimize`)                        *
+ * -------------------------------------------------------------------------- */
+
+function initialRevealedFrom(board, reveals) {
+  let revealed = ZERO, flagged = ZERO;
+  for (const r of reveals) {
+    if (!(revealed & bit(r))) revealed = revealCell(board, r, revealed, flagged);
+  }
+  return { revealed, flagged };
+}
+
+function trySolve(board, reveals, M) {
+  const { revealed, flagged } = initialRevealedFrom(board, reveals);
+  return solve(board, revealed, flagged, M);
+}
+
+function buildRevealSet(board, M, rng) {
+  const safeCells = [];
+  for (let i = 0; i < board.area; i++) {
+    if (!((board.mines >> BigInt(i)) & ONE)) safeCells.push(i);
+  }
+  if (safeCells.length === 0) return null;
+
+  const zeroSafe = safeCells.filter(i => board.counts[i] === 0);
+  let seedCell;
+  if (zeroSafe.length) {
+    seedCell = choice(rng, zeroSafe);
+  } else {
+    const seedPool = safeCells.slice().sort((a, b) => board.counts[a] - board.counts[b]);
+    const top = seedPool.slice(0, Math.max(3, (seedPool.length / 4) | 0));
+    seedCell = choice(rng, top);
+  }
+
+  const reveals = [seedCell];
+  let { revealed, flagged, status } = trySolve(board, reveals, M);
+  if (status === SOLVED) return reveals;
+
+  while (true) {
+    if (status === SOLVED) return reveals;
+    const hiddenSafe = safeCells.filter(i => !((revealed >> BigInt(i)) & ONE));
+    if (hiddenSafe.length === 0) return reveals;
+
+    const cands = hiddenSafe.length <= SAMPLE_K ? hiddenSafe : sample(rng, hiddenSafe, SAMPLE_K);
+    const currentCovered = popcount(revealed) + popcount(flagged);
+
+    let best = -1, bestGain = -1, bestRev = ZERO, bestFl = ZERO, bestStatus = STUCK;
+    for (const cand of cands) {
+      const trial = reveals.concat(cand);
+      const tr = trySolve(board, trial, M);
+      let gain = popcount(tr.revealed) + popcount(tr.flagged);
+      if (tr.status === SOLVED) gain += 10000;
+      if (gain > bestGain) {
+        bestGain = gain; best = cand;
+        bestRev = tr.revealed; bestFl = tr.flagged; bestStatus = tr.status;
+      }
+    }
+    if (best < 0 || bestGain <= currentCovered + 1) return null;
+    reveals.push(best);
+    revealed = bestRev; flagged = bestFl; status = bestStatus;
+  }
+}
+
+function minimizeReveals(board, M, reveals) {
+  const result = reveals.slice();
+  for (let i = result.length - 1; i >= 0; i--) {
+    const trial = result.slice(0, i).concat(result.slice(i + 1));
+    if (trial.length === 0) continue;
+    const { status } = trySolve(board, trial, M);
+    if (status === SOLVED) result.splice(i, 1);
+  }
+  return result;
+}
+
+/* -------------------------------------------------------------------------- *
+ * Generation (`generate`)                                                    *
+ * -------------------------------------------------------------------------- */
+
+function generate(w, h, M, seed = (Math.random() * 0x7fffffff) | 0) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const rng = mulberry32(seed * 1_000_003 + attempt);
+    const mineList = pregenerateDenseBoard(rng, w, h, M, 0);
+    const board = makeBoardFromMines(w, h, mineList);
+    // Reject layouts that ended up with any zero cell (the swap loop can fail
+    // to fully cover when the mine count is small and the geometry is awkward).
+    let hasZero = false;
+    for (let i = 0; i < board.area; i++) {
+      if (!((board.mines >> BigInt(i)) & ONE) && board.counts[i] === 0) {
+        hasZero = true; break;
+      }
+    }
+    if (hasZero) {
+      if (VERBOSE) console.log(`attempt ${attempt}: non-dense (zero cell present)`);
+      continue;
+    }
+
+    const reveals = buildRevealSet(board, M, rng);
+    if (reveals === null) {
+      if (VERBOSE) console.log(`attempt ${attempt}: forward pass failed`);
+      continue;
+    }
+    const minReveals = minimizeReveals(board, M, reveals);
+    const check = trySolve(board, minReveals, M);
+    if (check.status !== SOLVED) {
+      if (VERBOSE) console.log(`attempt ${attempt}: minimize broke solvability`);
+      continue;
+    }
+    if (VERBOSE) console.log(`attempt ${attempt}: ok reveals=${minReveals.length}`);
+    return { board, reveals: minReveals, attempts: attempt + 1 };
+  }
+  return null;
+}
+
+/* ============================================================================
+ * UI
+ * ========================================================================= */
+
+const boardEl    = document.getElementById('board');
+const mineEl     = document.getElementById('mineCount');
+const statusEl   = document.getElementById('status');
+const metaEl     = document.getElementById('meta');
+const newBtn     = document.getElementById('newBoard');
+const slider     = document.getElementById('mineSlider');
+const sliderVal  = document.getElementById('mineSliderVal');
+
+let state = null;
+
+function setStatus(msg, cls = '') {
+  statusEl.textContent = msg;
+  statusEl.className = 'status ' + cls;
+}
+
+function buildBoardDom() {
+  boardEl.innerHTML = '';
+  for (let i = 0; i < AREA; i++) {
+    const d = document.createElement('div');
+    d.className = 'cell hidden';
+    d.dataset.i = i;
+    boardEl.appendChild(d);
+  }
+}
+
+function render() {
+  const { board, revealed, flagged, initial, exploded } = state;
+  const cells = boardEl.children;
+  for (let i = 0; i < AREA; i++) {
+    const el = cells[i];
+    el.className = 'cell';
+    el.textContent = '';
+    const isRev  = (revealed & bit(i)) !== ZERO;
+    const isFlag = (flagged  & bit(i)) !== ZERO;
+    const isMine = (board.mines & bit(i)) !== ZERO;
+    if (isRev) {
+      if (isMine) {
+        el.classList.add('mine');
+        if (i === exploded) el.classList.add('exploded');
+        el.textContent = '✱';
+      } else {
+        el.classList.add('revealed');
+        const n = board.counts[i];
+        if (n > 0) { el.classList.add('num', 'c' + n); el.textContent = n; }
+      }
+    } else {
+      el.classList.add('hidden');
+      if (isFlag) { el.classList.add('flag'); el.textContent = '⚑'; }
+    }
+    if ((initial & bit(i)) !== ZERO) el.classList.add('initial');
+  }
+  mineEl.textContent = state.totalMines - popcount(state.flagged);
+}
+
+function playerReveal(i) {
+  if (state.over) return;
+  if ((state.flagged & bit(i)) !== ZERO) return;
+  if ((state.revealed & bit(i)) !== ZERO) return;
+  if ((state.board.mines & bit(i)) !== ZERO) {
+    state.revealed |= bit(i);
+    state.exploded = i;
+    loseGame();
+    return;
+  }
+  state.revealed = revealCell(state.board, i, state.revealed, state.flagged);
+}
+
+function playerChord(i) {
+  if (state.over) return;
+  if ((state.revealed & bit(i)) === ZERO) return;
+  const n = state.board.counts[i];
+  if (n === 0) return;
+  const nm = NEIGH_MASK[i];
+  const flaggedAround = popcount(nm & state.flagged);
+  if (flaggedAround !== n) return;
+  const toReveal = nm & ~state.revealed & ~state.flagged;
+  for (const j of bitsOf(toReveal)) {
+    playerReveal(j);
+    if (state.over) return;
+  }
+}
+
+function playerFlag(i) {
+  if (state.over) return;
+  if ((state.revealed & bit(i)) !== ZERO) return;
+  state.flagged ^= bit(i);
+}
+
+function loseGame() {
+  state.over = true;
+  state.revealed |= state.board.mines;
+  setStatus('Boom — that one was a mine.', 'lose');
+}
+
+function checkWin() {
+  if (state.over) return;
+  const safeMask = ALL_AREA & ~state.board.mines;
+  if ((state.revealed & safeMask) === safeMask) {
+    state.over = true;
+    setStatus('Solved.', 'win');
+  }
+}
+
+/* ------------------------------ gestures ---------------------------------- */
+/*
+ * pointerdown → 220 ms timer. If pointerup fires first, that's a tap
+ * (reveal or chord). If the timer fires first, that's a hold (flag); the
+ * subsequent pointerup is swallowed. Cancelled by pointercancel or by
+ * moving more than ~10 px before release.
+ */
+let press = null;
+
+function clearPress(removePressing = true) {
+  if (!press) return;
+  if (press.timer) { clearTimeout(press.timer); }
+  if (removePressing && press.el) press.el.classList.remove('pressing');
+  press = null;
+}
+
+boardEl.addEventListener('pointerdown', (e) => {
+  if (e.button !== undefined && e.button !== 0) return; // ignore right-click here
+  const t = e.target.closest('.cell');
+  if (!t) return;
+  const i = +t.dataset.i;
+  clearPress();
+  t.classList.add('pressing');
+  press = {
+    i, el: t, x: e.clientX, y: e.clientY, fired: false,
+    timer: setTimeout(() => {
+      if (!press) return;
+      press.fired = true;
+      press.el.classList.remove('pressing');
+      playerFlag(press.i);
+      if (navigator.vibrate) { try { navigator.vibrate(18); } catch (_) {} }
+      render();
+      checkWin();
+    }, HOLD_MS),
   };
+  // Capture so pointerup outside the cell still resolves the press.
+  try { t.setPointerCapture(e.pointerId); } catch (_) {}
+});
 
-  const repaintCell = (r, c) => {
-    const el = boardEl.children[r * C + c];
-    if (el) paint(el, r, c);
-  };
+boardEl.addEventListener('pointermove', (e) => {
+  if (!press) return;
+  const dx = e.clientX - press.x, dy = e.clientY - press.y;
+  if (dx * dx + dy * dy > 100) clearPress();
+});
 
-  boardEl.addEventListener('click', e => {
-    const t = e.target.closest('.cell');
-    if (!t) return;
-    const r = +t.dataset.r, c = +t.dataset.c;
-    if (flagged[r][c]) return;
-    revealed[r][c] = true;
-    repaintCell(r, c);
-  });
-  boardEl.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    const t = e.target.closest('.cell');
-    if (!t) return;
-    const r = +t.dataset.r, c = +t.dataset.c;
-    if (revealed[r][c]) return;
-    flagged[r][c] = !flagged[r][c];
-    repaintCell(r, c);
-  });
-
-  $('gen').addEventListener('click', () => {
-    R = Math.max(3, Math.min(60, +$('rows').value || 12));
-    C = Math.max(3, Math.min(60, +$('cols').value || 16));
-    const d = Math.max(0, Math.min(0.5, +$('density').value || 0.1));
-    generate(d);
-    render();
-  });
-  $('reveal').addEventListener('click', () => {
-    for (let r = 0; r < R; r++)
-      for (let c = 0; c < C; c++)
-        revealed[r][c] = true;
-    render();
-  });
-
-  // initial
-  generate(0.10);
+boardEl.addEventListener('pointerup', (e) => {
+  if (!press) return;
+  const wasFired = press.fired;
+  const i = press.i;
+  clearPress();
+  if (wasFired) return;
+  // Tap.
+  if ((state.revealed & bit(i)) !== ZERO) {
+    playerChord(i);
+  } else if ((state.flagged & bit(i)) === ZERO) {
+    playerReveal(i);
+  }
   render();
-})();
+  checkWin();
+});
+
+boardEl.addEventListener('pointercancel', () => clearPress());
+boardEl.addEventListener('pointerleave', (e) => {
+  // pointerleave on the board container only matters if we weren't capturing.
+  if (!press) return;
+});
+
+// Right-click on desktop = flag, for parity.
+boardEl.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const t = e.target.closest('.cell');
+  if (!t) return;
+  clearPress();
+  playerFlag(+t.dataset.i);
+  render();
+  checkWin();
+});
+
+/* ------------------------------ controls ---------------------------------- */
+
+slider.addEventListener('input', () => { sliderVal.textContent = slider.value; });
+
+newBtn.addEventListener('click', () => {
+  newGame();
+});
+
+function newGame() {
+  newBtn.disabled = true;
+  const M = Math.max(10, Math.min(40, +slider.value | 0));
+  setStatus('Generating…');
+  // Yield once so the UI updates, then run.
+  setTimeout(() => {
+    const t0 = performance.now();
+    const result = generate(W, H, M);
+    const t1 = performance.now();
+    newBtn.disabled = false;
+    if (!result) {
+      setStatus(`No no-guess board found at ${M} mines after ${MAX_ATTEMPTS} attempts.`, 'lose');
+      metaEl.textContent = '';
+      return;
+    }
+    const { board, reveals, attempts } = result;
+    let initial = ZERO, revealed = ZERO;
+    for (const r of reveals) {
+      initial |= bit(r);
+      revealed = revealCell(board, r, revealed, ZERO);
+    }
+    state = {
+      board, totalMines: M,
+      initial, revealed, flagged: ZERO,
+      exploded: -1, over: false,
+    };
+    buildBoardDom();
+    render();
+    metaEl.textContent =
+      `mines: ${M} · initial reveals: ${reveals.length} · ` +
+      `generator attempts: ${attempts} · generated in ${(t1 - t0).toFixed(1)} ms`;
+    setStatus('Tap to reveal · hold to flag.');
+  }, 0);
+}
+
+// Suppress the page-level context menu / long-press selection on iOS.
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.board')) e.preventDefault();
+});
+
+newGame();
 </script>
 </body>
 </html>
