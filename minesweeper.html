@@ -35,6 +35,9 @@
     column-gap: 10px;
     row-gap: 12px;
     align-items: center;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   #mineCount {
     grid-column: 1;
@@ -1008,8 +1011,9 @@ function render() {
         const n = board.counts[i];
         if (n > 0) { el.classList.add('num', 'c' + n); el.textContent = n; }
       }
-    } else if (isFlag && won) {
-      // Win indication: flagged cells flip to their mine appearance.
+    } else if (won) {
+      // Win indication: every unrevealed cell flips to its mine appearance
+      // (all unrevealed cells are mines at this point by definition).
       el.classList.add('mine');
       el.textContent = '✱';
     } else {
@@ -1165,10 +1169,10 @@ function newGame() {
   }, 0);
 }
 
-// Suppress the page-level context menu / long-press selection on iOS.
-document.addEventListener('contextmenu', (e) => {
-  if (e.target.closest('#board')) e.preventDefault();
-});
+// Suppress the native context menu everywhere in the app — both for the
+// board (handled by our own gesture logic) and for the New button (where
+// a long-press while flagging can otherwise pop up the OS callout).
+document.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
 newGame();
 </script>
