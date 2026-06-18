@@ -1084,6 +1084,10 @@ function checkWin() {
 let press = null;
 let lastPointerType = '';
 
+// Block iOS's text-selection loupe before its gesture recognizer fires.
+// Pointer events still fire, so the press-timer logic below is unaffected.
+boardEl.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+
 function clearPress(removePressing = true) {
   if (!press) return;
   if (press.timer) { clearTimeout(press.timer); }
