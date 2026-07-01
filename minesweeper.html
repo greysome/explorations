@@ -72,8 +72,8 @@
   #board {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
     gap: 2px;
     background: var(--border);
     border: 1px solid var(--border);
@@ -154,7 +154,7 @@
  * Configuration                                                              *
  * -------------------------------------------------------------------------- */
 
-const W = 8, H = 8;
+const W = 5, H = 5;
 const AREA = W * H;
 const MAX_ATTEMPTS = 500;        // matches Python's default --max-attempts
 const SAMPLE_K     = 8;          // build_reveal_set: candidates sampled per step
@@ -942,49 +942,43 @@ function minimizeReveals(board, M, reveals) {
 }
 
 /* -------------------------------------------------------------------------- *
- * Generation (`generate`)                                                    *
+ * Generation                                                                 *
+ *                                                                            *
+ * Split into two seed sources: the board layout RNG (fixed per user request  *
+ * so all 10 solves see the same board) and the solve RNG (varied 1..10 to   *
+ * study how different opening-reveal searches choose reveal sets on the      *
+ * same board).                                                               *
  * -------------------------------------------------------------------------- */
 
-function generate(w, h, M, seed = (Math.random() * 0x7fffffff) | 0) {
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const rng = mulberry32(seed * 1_000_003 + attempt);
-    const mineList = pregenerateDenseBoard(rng, w, h, M, 0);
-    const board = makeBoardFromMines(w, h, mineList);
-    // Reject layouts that ended up with any zero cell (the swap loop can fail
-    // to fully cover when the mine count is small and the geometry is awkward).
-    let hasZero = false;
-    for (let i = 0; i < board.area; i++) {
-      if (!((board.mines >> BigInt(i)) & ONE) && board.counts[i] === 0) {
-        hasZero = true; break;
-      }
+function generateBoard(w, h, M, boardSeed) {
+  const rng = mulberry32(boardSeed);
+  const mineList = pregenerateDenseBoard(rng, w, h, M, 0);
+  const board = makeBoardFromMines(w, h, mineList);
+  let hasZero = false;
+  for (let i = 0; i < board.area; i++) {
+    if (!((board.mines >> BigInt(i)) & ONE) && board.counts[i] === 0) {
+      hasZero = true; break;
     }
-    if (hasZero) {
-      if (VERBOSE) console.log(`attempt ${attempt}: non-dense (zero cell present)`);
-      continue;
-    }
-
-    const reveals = buildRevealSet(board, M, rng);
-    if (reveals === null) {
-      if (VERBOSE) console.log(`attempt ${attempt}: forward pass failed`);
-      continue;
-    }
-    const minReveals = minimizeReveals(board, M, reveals);
-    const check = trySolve(board, minReveals, M);
-    if (check.status !== SOLVED) {
-      if (VERBOSE) console.log(`attempt ${attempt}: minimize broke solvability`);
-      continue;
-    }
-    if (VERBOSE) console.log(`attempt ${attempt}: ok reveals=${minReveals.length}`);
-    return { board, reveals: minReveals, attempts: attempt + 1 };
   }
-  return null;
+  return { board, dense: !hasZero };
+}
+
+function solveWithSeed(board, M, solveSeed) {
+  const rng = mulberry32(solveSeed);
+  const reveals = buildRevealSet(board, M, rng);
+  if (reveals === null) return null;
+  const minReveals = minimizeReveals(board, M, reveals);
+  const check = trySolve(board, minReveals, M);
+  if (check.status !== SOLVED) return null;
+  return minReveals;
 }
 
 /* ============================================================================
  * UI
  * ========================================================================= */
 
-const DEFAULT_M = 26;
+const DEFAULT_M = 10;   // matches the Python repo's 5x5_10 preset
+const SOLVE_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const boardEl = document.getElementById('board');
 const mineEl  = document.getElementById('mineCount');
@@ -1163,17 +1157,48 @@ boardEl.addEventListener('contextmenu', (e) => {
 
 newBtn.addEventListener('click', () => { newGame(); });
 
+function formatRevealGrid(board, reveals) {
+  const revSet = new Set(reveals);
+  const rows = [];
+  for (let r = 0; r < H; r++) {
+    const cells = [];
+    for (let c = 0; c < W; c++) {
+      const i = r * W + c;
+      if (!revSet.has(i)) { cells.push('.'); continue; }
+      const isMine = (board.mines & bit(i)) !== ZERO;
+      cells.push(isMine ? '*' : String(board.counts[i]));
+    }
+    rows.push(cells.join(' '));
+  }
+  return rows.join('\n');
+}
+
 function newGame() {
   newBtn.disabled = true;
   const M = DEFAULT_M;
   // Yield once so the disabled state paints, then run.
   setTimeout(() => {
-    const result = generate(W, H, M);
-    newBtn.disabled = false;
-    if (!result) return;
-    const { board, reveals } = result;
+    // Board RNG is fixed for this user request; a random board seed is chosen
+    // once and reused across all 10 solve seeds so they all see the same board.
+    const boardSeed = (Math.random() * 0x7fffffff) | 0;
+    const { board, dense } = generateBoard(W, H, M, boardSeed);
+    console.log(`board seed: ${boardSeed}  (${dense ? 'dense' : 'NOT DENSE'})`);
+
+    let uiReveals = null;
+    for (const solveSeed of SOLVE_SEEDS) {
+      const reveals = solveWithSeed(board, M, solveSeed);
+      console.log(`\nsolve seed ${solveSeed}${reveals ? ` (${reveals.length} reveals)` : ' (no solution)'}:`);
+      if (reveals) {
+        console.log(formatRevealGrid(board, reveals));
+        if (uiReveals === null) uiReveals = reveals;
+      }
+    }
+
+    // Show the first-successful reveal set in the UI so the board is still
+    // playable; if every solve failed, show the board fully hidden.
+    if (uiReveals === null) uiReveals = [];
     let revealed = ZERO;
-    for (const r of reveals) revealed = revealCell(board, r, revealed, ZERO);
+    for (const r of uiReveals) revealed = revealCell(board, r, revealed, ZERO);
     state = {
       board, totalMines: M,
       revealed, flagged: ZERO,
@@ -1181,6 +1206,7 @@ function newGame() {
     };
     buildBoardDom();
     render();
+    newBtn.disabled = false;
   }, 0);
 }
 
