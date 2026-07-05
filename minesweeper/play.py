@@ -10,20 +10,20 @@ Positional args:
   - a directory: add every `*.json` in it.
   - no args: scan the current directory.
 
-Each JSON file describes exactly one board:
+Each `.json` file is JSON Lines (one board per line). Each line:
 
     {
-      "w": 5,
-      "h": 5,
-      "mines":   [1, 4, 7, ...],    // cell indices (row-major)
-      "reveals": [0, 8, ...],       // initially-revealed safe cells
-      "difficulty": "hard",         // shown in the toolbar; string or number
-      "seed": 12345,                // optional metadata (any keys allowed)
-      ...
+      "w": 5, "h": 5,
+      "board":   "!!23!24!5!13!5!1!34!12!21",  // len w*h; '!' = mine,
+                                               //          '0'..'8' = clue
+      "reveals": [0, 8, ...],                  // initially-revealed cells
+      "mines":   10,                           // optional: mine count check
+      "difficulty": 0.42,                      // shown in the toolbar
+      ...                                      // any extra metadata is kept
     }
 
-Any keys other than the ones above are shown as a `key=value` string in the
-status area.
+The `difficulty` value is displayed as-is; floats are formatted to 3 decimals.
+Any keys other than the ones above are shown as `key=value` in the status area.
 
 Controls:
   - Left click a hidden cell to reveal it.
@@ -117,8 +117,8 @@ DIGIT_COLORS = {
     5: '#f57c00', 6: '#0097a7', 7: '#212121', 8: '#616161',
 }
 
-REQUIRED_KEYS = ('w', 'h', 'mines', 'reveals')
-DISPLAY_KEYS = {'w', 'h', 'mines', 'reveals', 'difficulty'}
+REQUIRED_KEYS = ('w', 'h', 'board', 'reveals')
+DISPLAY_KEYS = {'w', 'h', 'board', 'mines', 'reveals', 'difficulty'}
 
 
 def discover_files(args):
@@ -144,63 +144,112 @@ def discover_files(args):
     return files
 
 
-def load_spec(path):
-    """Load a JSON board spec. Returns a dict with validated required fields.
+def _parse_board_string(s, area):
+    """Parse a `board` string. Returns (mines_indices, counts)."""
+    if not isinstance(s, str) or len(s) != area:
+        raise ValueError(f'board string must be length {area}, got {len(s)}')
+    mines = []
+    counts = [0] * area
+    for i, ch in enumerate(s):
+        if ch == '!':
+            mines.append(i)
+        elif '0' <= ch <= '8':
+            counts[i] = int(ch)
+        else:
+            raise ValueError(f'unknown board char {ch!r} at index {i}')
+    return mines, counts
 
-    Raises ValueError with a path-prefixed message on any problem.
+
+def _validate_spec(spec):
+    """Validate one board spec dict. Mutates the dict with normalized fields
+    and returns it. Raises ValueError on any problem.
+
+    On return, spec always has:
+      w, h              : ints
+      mines             : list of mine cell indices (parsed from `board`)
+      counts            : list of per-cell adjacent-mine counts
+      reveals           : list of ints (validated safe)
+      difficulty        : whatever was in the JSON, or None
+      board             : original board string (preserved)
     """
-    with open(path) as f:
-        try:
-            spec = json.load(f)
-        except json.JSONDecodeError as e:
-            raise ValueError(f'{os.path.basename(path)}: invalid JSON: {e}') from None
     if not isinstance(spec, dict):
-        raise ValueError(f'{os.path.basename(path)}: top-level must be an object')
+        raise ValueError('top-level must be an object')
     for key in REQUIRED_KEYS:
         if key not in spec:
-            raise ValueError(
-                f'{os.path.basename(path)}: missing required field {key!r}')
+            raise ValueError(f'missing required field {key!r}')
     try:
         w = int(spec['w'])
         h = int(spec['h'])
     except (TypeError, ValueError):
-        raise ValueError(
-            f'{os.path.basename(path)}: w/h must be integers') from None
+        raise ValueError('w/h must be integers') from None
     if w <= 0 or h <= 0:
-        raise ValueError(
-            f'{os.path.basename(path)}: invalid dimensions {w}x{h}')
+        raise ValueError(f'invalid dimensions {w}x{h}')
     area = w * h
 
-    def _validate_indices(field):
-        vals = spec[field]
-        if not isinstance(vals, list):
-            raise ValueError(
-                f'{os.path.basename(path)}: {field!r} must be a list')
-        out = []
-        for v in vals:
-            if not isinstance(v, int) or isinstance(v, bool):
-                raise ValueError(
-                    f'{os.path.basename(path)}: {field!r} contains '
-                    f'non-integer {v!r}')
-            if v < 0 or v >= area:
-                raise ValueError(
-                    f'{os.path.basename(path)}: {field!r} index {v} out '
-                    f'of range [0, {area})')
-            out.append(v)
-        return out
+    mines, counts = _parse_board_string(spec['board'], area)
 
-    mines = _validate_indices('mines')
-    reveals = _validate_indices('reveals')
-    overlap = set(mines) & set(reveals)
-    if overlap:
-        raise ValueError(
-            f'{os.path.basename(path)}: cells listed as both mine and '
-            f'reveal: {sorted(overlap)}')
+    # Optional mine-count check.
+    declared = spec.get('mines')
+    if isinstance(declared, int) and not isinstance(declared, bool):
+        if declared != len(mines):
+            raise ValueError(
+                f'declared mines={declared} != counted {len(mines)}')
+
+    reveals = spec['reveals']
+    if not isinstance(reveals, list):
+        raise ValueError("'reveals' must be a list")
+    validated_reveals = []
+    mines_set = set(mines)
+    for v in reveals:
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise ValueError(f"'reveals' contains non-integer {v!r}")
+        if v < 0 or v >= area:
+            raise ValueError(f"'reveals' index {v} out of range [0, {area})")
+        if v in mines_set:
+            raise ValueError(f"'reveals' index {v} is a mine")
+        validated_reveals.append(v)
+
     spec['w'] = w
     spec['h'] = h
     spec['mines'] = mines
-    spec['reveals'] = reveals
+    spec['counts'] = counts
+    spec['reveals'] = validated_reveals
+    spec.setdefault('difficulty', None)
     return spec
+
+
+def load_specs(path):
+    """Load a JSON-Lines board file. Returns a list of validated specs.
+
+    Blank lines are skipped. On error, raises ValueError with a
+    `basename:lineno:` prefix so the caller can point at the offender.
+    """
+    specs = []
+    with open(path) as f:
+        for lineno, raw in enumerate(f, 1):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                spec = json.loads(line)
+            except json.JSONDecodeError as e:
+                raise ValueError(
+                    f'{os.path.basename(path)}:{lineno}: '
+                    f'invalid JSON: {e}') from None
+            try:
+                specs.append(_validate_spec(spec))
+            except ValueError as e:
+                raise ValueError(
+                    f'{os.path.basename(path)}:{lineno}: {e}') from None
+    return specs
+
+
+def _format_difficulty(d):
+    if d is None:
+        return '--'
+    if isinstance(d, float):
+        return f'{d:.3f}'
+    return str(d)
 
 
 class Game:
@@ -208,7 +257,8 @@ class Game:
         self.root = root
         self.files = files
         self.current_file = None
-        self.spec = None
+        self.specs = []         # loaded from current file
+        self.spec = None        # currently selected board
         self.board = None
         self.M = 0
         self.revealed = 0
@@ -228,21 +278,29 @@ class Game:
         self.file_box = ttk.Combobox(
             bar, textvariable=self.file_var,
             values=[os.path.basename(f) for f in files],
-            width=28, state='readonly')
+            width=24, state='readonly')
         self.file_box.grid(row=0, column=1, padx=(2, 12))
         self.file_box.bind('<<ComboboxSelected>>', self._on_file_change)
 
+        ttk.Label(bar, text='Board:').grid(row=0, column=2)
+        self.board_var = tk.StringVar()
+        self.board_box = ttk.Combobox(
+            bar, textvariable=self.board_var, values=[],
+            width=18, state='readonly')
+        self.board_box.grid(row=0, column=3, padx=(2, 12))
+        self.board_box.bind('<<ComboboxSelected>>', self._on_board_change)
+
         self.difficulty_label = ttk.Label(bar, text='Difficulty: --')
-        self.difficulty_label.grid(row=0, column=2, padx=(0, 12))
+        self.difficulty_label.grid(row=0, column=4, padx=(0, 12))
 
         self.mines_label = ttk.Label(bar, text='Mines: --')
-        self.mines_label.grid(row=0, column=3, padx=(0, 12))
+        self.mines_label.grid(row=0, column=5, padx=(0, 12))
 
         self.status_label = ttk.Label(bar, text='')
-        self.status_label.grid(row=0, column=4, sticky='w')
+        self.status_label.grid(row=0, column=6, sticky='w')
 
         ttk.Button(bar, text='Restart', command=self._restart).grid(
-            row=0, column=5, padx=(12, 0))
+            row=0, column=7, padx=(12, 0))
 
         self.grid_frame = ttk.Frame(root, padding=6)
         self.grid_frame.grid(row=1, column=0)
@@ -250,6 +308,16 @@ class Game:
         if files:
             self.file_var.set(os.path.basename(files[0]))
             self._on_file_change()
+
+    def _board_labels(self):
+        """Return a list of picker labels — one per spec in the current file.
+
+        Format `#N diff=X.XXX` so difficulty is visible in the picker itself.
+        """
+        return [
+            f'#{i + 1} diff={_format_difficulty(sp.get("difficulty"))}'
+            for i, sp in enumerate(self.specs)
+        ]
 
     def _on_file_change(self, _evt=None):
         name = self.file_var.get()
@@ -259,8 +327,9 @@ class Game:
             return
         self.current_file = path
         try:
-            self.spec = load_spec(path)
+            self.specs = load_specs(path)
         except ValueError as e:
+            self.specs = []
             self.spec = None
             self.board = None
             for w in self.grid_frame.winfo_children():
@@ -268,12 +337,36 @@ class Game:
             self.status_label.config(text=str(e))
             self.difficulty_label.config(text='Difficulty: --')
             self.mines_label.config(text='Mines: --')
+            self.board_box['values'] = []
+            self.board_var.set('')
             return
+        labels = self._board_labels()
+        self.board_box['values'] = labels
+        if labels:
+            self.board_var.set(labels[0])
+            self._on_board_change()
+        else:
+            self.status_label.config(text='no boards in file')
+
+    def _on_board_change(self, _evt=None):
+        label = self.board_var.get()
+        try:
+            idx = self._board_labels().index(label)
+        except ValueError:
+            return
+        self.spec = self.specs[idx]
         self._load_board()
 
     def _load_board(self):
         sp = self.spec
-        self.board = Board.from_mine_indices(sp['w'], sp['h'], sp['mines'])
+        # Build Board directly from spec-derived data. The spec's `board`
+        # string is the source of truth for counts; no need to recompute
+        # them from mine indices.
+        mines_bitmask = 0
+        for m in sp['mines']:
+            mines_bitmask |= 1 << m
+        self.board = Board(w=sp['w'], h=sp['h'],
+                           mines=mines_bitmask, counts=sp['counts'])
         self.M = len(sp['mines'])
         self.revealed = 0
         self.flagged = 0
@@ -283,12 +376,13 @@ class Game:
             self.revealed = _reveal_cell(
                 self.board, r, self.revealed, self.flagged)
 
-        diff = sp.get('difficulty', '--')
-        self.difficulty_label.config(text=f'Difficulty: {diff}')
+        self.difficulty_label.config(
+            text=f'Difficulty: {_format_difficulty(sp.get("difficulty"))}')
 
-        # Any extra metadata beyond the required + difficulty keys goes into
-        # the status area so it doesn't get lost.
-        bits = [f'{k}={v}' for k, v in sp.items() if k not in DISPLAY_KEYS]
+        # Any extra metadata beyond the standard keys goes into the status
+        # area so it isn't lost. Skip internal helpers.
+        skip = DISPLAY_KEYS | {'counts'}
+        bits = [f'{k}={v}' for k, v in sp.items() if k not in skip]
         self.status_label.config(text='  '.join(bits))
 
         self._rebuild_grid()
