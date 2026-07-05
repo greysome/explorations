@@ -1,29 +1,43 @@
-"""Minimal tkinter Minesweeper UI.
+"""Tkinter Minesweeper UI that loads JSON board specs.
 
-  python play.py [board_or_dir ...]
+  python play.py [path ...]
 
 Positional args:
-  - a `.boards` file: load and pick a board from it.
-  - a directory: list all `*.boards` in it.
+  - a `.json` file: add it to the picker.
+  - a directory: add every `*.json` in it.
   - no args: scan the current directory.
+
+Each JSON file describes exactly one board:
+
+    {
+      "w": 5,
+      "h": 5,
+      "mines":   [1, 4, 7, ...],    // cell indices (row-major)
+      "reveals": [0, 8, ...],       // initially-revealed safe cells
+      "difficulty": "hard",         // shown in the toolbar; string or number
+      "seed": 12345,                // optional metadata (any keys allowed)
+      ...
+    }
+
+Any keys other than the ones above are shown as a `key=value` string in the
+status area.
 
 Controls:
   - Left click a hidden cell to reveal it.
   - Right click a hidden cell to toggle a flag.
 
-A mine counter (`mines − flags`) shows in the top bar.
+A mine counter (`mines - flags`) shows in the top bar.
 """
 
 import argparse
 import glob
+import json
 import os
-import random
 import sys
 import tkinter as tk
 from tkinter import ttk
 
-from board import Board, neighbors8
-from boardsfile import load_boards
+from board import Board
 from solver import _reveal_cell
 
 
@@ -32,29 +46,99 @@ DIGIT_COLORS = {
     5: '#f57c00', 6: '#0097a7', 7: '#212121', 8: '#616161',
 }
 
+REQUIRED_KEYS = ('w', 'h', 'mines', 'reveals')
+DISPLAY_KEYS = {'w', 'h', 'mines', 'reveals', 'difficulty'}
+
 
 def discover_files(args):
     if not args:
         args = ['.']
     files = []
+    seen = set()
     for a in args:
+        matches = []
         if os.path.isdir(a):
-            files.extend(sorted(glob.glob(os.path.join(a, '*.boards'))))
+            matches = sorted(glob.glob(os.path.join(a, '*.json')))
         elif os.path.isfile(a):
-            files.append(a)
+            matches = [a]
         else:
             print(f'warning: {a} not found', file=sys.stderr)
+            continue
+        for m in matches:
+            resolved = os.path.abspath(m)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            files.append(m)
     return files
+
+
+def load_spec(path):
+    """Load a JSON board spec. Returns a dict with validated required fields.
+
+    Raises ValueError with a path-prefixed message on any problem.
+    """
+    with open(path) as f:
+        try:
+            spec = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f'{os.path.basename(path)}: invalid JSON: {e}') from None
+    if not isinstance(spec, dict):
+        raise ValueError(f'{os.path.basename(path)}: top-level must be an object')
+    for key in REQUIRED_KEYS:
+        if key not in spec:
+            raise ValueError(
+                f'{os.path.basename(path)}: missing required field {key!r}')
+    try:
+        w = int(spec['w'])
+        h = int(spec['h'])
+    except (TypeError, ValueError):
+        raise ValueError(
+            f'{os.path.basename(path)}: w/h must be integers') from None
+    if w <= 0 or h <= 0:
+        raise ValueError(
+            f'{os.path.basename(path)}: invalid dimensions {w}x{h}')
+    area = w * h
+
+    def _validate_indices(field):
+        vals = spec[field]
+        if not isinstance(vals, list):
+            raise ValueError(
+                f'{os.path.basename(path)}: {field!r} must be a list')
+        out = []
+        for v in vals:
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise ValueError(
+                    f'{os.path.basename(path)}: {field!r} contains '
+                    f'non-integer {v!r}')
+            if v < 0 or v >= area:
+                raise ValueError(
+                    f'{os.path.basename(path)}: {field!r} index {v} out '
+                    f'of range [0, {area})')
+            out.append(v)
+        return out
+
+    mines = _validate_indices('mines')
+    reveals = _validate_indices('reveals')
+    overlap = set(mines) & set(reveals)
+    if overlap:
+        raise ValueError(
+            f'{os.path.basename(path)}: cells listed as both mine and '
+            f'reveal: {sorted(overlap)}')
+    spec['w'] = w
+    spec['h'] = h
+    spec['mines'] = mines
+    spec['reveals'] = reveals
+    return spec
 
 
 class Game:
     def __init__(self, root, files):
         self.root = root
         self.files = files
-        self.boards = []           # list of StoredBoard for current file
-        self._board_by_key = {}
         self.current_file = None
-        self.board = None          # Board for current selection
+        self.spec = None
+        self.board = None
         self.M = 0
         self.revealed = 0
         self.flagged = 0
@@ -67,30 +151,27 @@ class Game:
 
         bar = ttk.Frame(root, padding=6)
         bar.grid(row=0, column=0, sticky='ew')
+
         ttk.Label(bar, text='File:').grid(row=0, column=0)
         self.file_var = tk.StringVar()
         self.file_box = ttk.Combobox(
             bar, textvariable=self.file_var,
             values=[os.path.basename(f) for f in files],
-            width=22, state='readonly')
+            width=28, state='readonly')
         self.file_box.grid(row=0, column=1, padx=(2, 12))
         self.file_box.bind('<<ComboboxSelected>>', self._on_file_change)
 
-        ttk.Label(bar, text='Board:').grid(row=0, column=2)
-        self.board_var = tk.StringVar()
-        self.board_box = ttk.Combobox(
-            bar, textvariable=self.board_var, values=[],
-            width=8, state='readonly')
-        self.board_box.grid(row=0, column=3, padx=(2, 12))
-        self.board_box.bind('<<ComboboxSelected>>', self._on_board_change)
+        self.difficulty_label = ttk.Label(bar, text='Difficulty: --')
+        self.difficulty_label.grid(row=0, column=2, padx=(0, 12))
 
         self.mines_label = ttk.Label(bar, text='Mines: --')
-        self.mines_label.grid(row=0, column=4, padx=(0, 12))
+        self.mines_label.grid(row=0, column=3, padx=(0, 12))
+
         self.status_label = ttk.Label(bar, text='')
-        self.status_label.grid(row=0, column=5)
+        self.status_label.grid(row=0, column=4, sticky='w')
 
         ttk.Button(bar, text='Restart', command=self._restart).grid(
-            row=0, column=6, padx=(12, 0))
+            row=0, column=5, padx=(12, 0))
 
         self.grid_frame = ttk.Frame(root, padding=6)
         self.grid_frame.grid(row=1, column=0)
@@ -101,54 +182,50 @@ class Game:
 
     def _on_file_change(self, _evt=None):
         name = self.file_var.get()
-        path = next((f for f in self.files if os.path.basename(f) == name),
-                    None)
+        path = next(
+            (f for f in self.files if os.path.basename(f) == name), None)
         if not path:
             return
         self.current_file = path
         try:
-            self.boards = load_boards(path)
-        except Exception as e:
-            self.boards = []
-            self.status_label.config(text=f'load error: {e}')
+            self.spec = load_spec(path)
+        except ValueError as e:
+            self.spec = None
+            self.board = None
+            for w in self.grid_frame.winfo_children():
+                w.destroy()
+            self.status_label.config(text=str(e))
+            self.difficulty_label.config(text='Difficulty: --')
+            self.mines_label.config(text='Mines: --')
             return
-        keys = [str(sb.meta.get('seed', i)) for i, sb in enumerate(self.boards)]
-        self._board_by_key = dict(zip(keys, self.boards))
-        self.board_box['values'] = keys
-        if self.boards:
-            self.board_var.set(keys[0])
-            self._on_board_change()
-        else:
-            self.status_label.config(text='no boards in file')
+        self._load_board()
 
-    def _on_board_change(self, _evt=None):
-        key = self.board_var.get()
-        if not key:
-            return
-        sb = self._board_by_key.get(key)
-        if sb is None:
-            return
-        self.board = Board.from_mine_indices(sb.w, sb.h, sb.mines)
-        self.M = len(sb.mines)
+    def _load_board(self):
+        sp = self.spec
+        self.board = Board.from_mine_indices(sp['w'], sp['h'], sp['mines'])
+        self.M = len(sp['mines'])
         self.revealed = 0
         self.flagged = 0
         self.game_over = False
         self.won = False
-        for r in sb.reveals:
+        for r in sp['reveals']:
             self.revealed = _reveal_cell(
                 self.board, r, self.revealed, self.flagged)
-        meta = sb.meta or {}
-        bits = []
-        for k in ('score', 'reveals', 'seed'):
-            if k in meta:
-                bits.append(f'{k}={meta[k]}')
+
+        diff = sp.get('difficulty', '--')
+        self.difficulty_label.config(text=f'Difficulty: {diff}')
+
+        # Any extra metadata beyond the required + difficulty keys goes into
+        # the status area so it doesn't get lost.
+        bits = [f'{k}={v}' for k, v in sp.items() if k not in DISPLAY_KEYS]
         self.status_label.config(text='  '.join(bits))
+
         self._rebuild_grid()
         self._refresh()
 
     def _restart(self):
-        if self.board_var.get():
-            self._on_board_change()
+        if self.spec is not None:
+            self._load_board()
 
     def _rebuild_grid(self):
         for w in self.grid_frame.winfo_children():
@@ -174,10 +251,9 @@ class Game:
         if (self.revealed >> i) & 1 or (self.flagged >> i) & 1:
             return
         if (self.board.mines >> i) & 1:
-            # Mark hit, reveal it as a mine; show all mines for post-mortem.
             self.revealed |= 1 << i
             self.game_over = True
-            self.status_label.config(text='BOOM. You lose.')
+            self._append_status('BOOM. You lose.')
             self._refresh(show_mines=True, hit=i)
             return
         self.revealed = _reveal_cell(
@@ -186,7 +262,11 @@ class Game:
         if self._check_win():
             self.won = True
             self.game_over = True
-            self.status_label.config(text='You win!')
+            self._append_status('You win!')
+
+    def _append_status(self, msg):
+        cur = self.status_label.cget('text')
+        self.status_label.config(text=(msg if not cur else f'{msg}  {cur}'))
 
     def _toggle_flag(self, i):
         if self.game_over:
@@ -231,19 +311,18 @@ class Game:
                 else:
                     btn.config(text='', fg='black', bg='#bdbdbd',
                                relief='raised')
-        # Update counter.
         remaining = self.M - bin(self.flagged).count('1')
         self.mines_label.config(text=f'Mines: {remaining}')
 
 
 def main():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument('paths', nargs='*',
-                   help='.boards files or directories to search')
+                   help='.json files or directories to search')
     args = p.parse_args()
     files = discover_files(args.paths)
     if not files:
-        print('no .boards files found', file=sys.stderr)
+        print('no .json board files found', file=sys.stderr)
         sys.exit(1)
     root = tk.Tk()
     Game(root, files)
