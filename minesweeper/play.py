@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
 """Tkinter Minesweeper UI that loads JSON board specs.
 
   python play.py [path ...]
+
+Standalone: only depends on the Python standard library (tkinter included).
 
 Positional args:
   - a `.json` file: add it to the picker.
@@ -35,10 +38,78 @@ import json
 import os
 import sys
 import tkinter as tk
+from collections import deque
+from dataclasses import dataclass
+from functools import lru_cache
 from tkinter import ttk
 
-from board import Board
-from solver import _reveal_cell
+
+# ---------------------------------------------------------------------------
+# Board model (inlined from board.py so play.py stands alone).
+# ---------------------------------------------------------------------------
+
+@lru_cache(maxsize=None)
+def neighbors8(w, h):
+    """Per-cell 8-neighbor index lists (no self), row-major."""
+    out = []
+    for r in range(h):
+        for c in range(w):
+            ns = []
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    if dr == 0 and dc == 0:
+                        continue
+                    rr, cc = r + dr, c + dc
+                    if 0 <= rr < h and 0 <= cc < w:
+                        ns.append(rr * w + cc)
+            out.append(ns)
+    return out
+
+
+@dataclass
+class Board:
+    w: int
+    h: int
+    mines: int    # bitset of mine cells
+    counts: list  # per-cell adjacent-mine count
+
+    @classmethod
+    def from_mine_indices(cls, w, h, mine_indices):
+        mines = 0
+        for i in mine_indices:
+            mines |= 1 << i
+        ns = neighbors8(w, h)
+        counts = [
+            sum(1 for j in ns[i] if (mines >> j) & 1)
+            for i in range(w * h)
+        ]
+        return cls(w=w, h=h, mines=mines, counts=counts)
+
+    @property
+    def area(self):
+        return self.w * self.h
+
+
+def _reveal_cell(board, i, revealed, flagged):
+    """Reveal cell i. If it's a 0-cell, cascade to all connected 0-cells."""
+    if (board.mines >> i) & 1:
+        raise RuntimeError(f'tried to reveal mine at {i}')
+    if board.counts[i] != 0:
+        return revealed | (1 << i)
+    ns = neighbors8(board.w, board.h)
+    q = deque([i])
+    while q:
+        j = q.popleft()
+        jb = 1 << j
+        if revealed & jb:
+            continue
+        revealed |= jb
+        if board.counts[j] == 0:
+            for k in ns[j]:
+                kb = 1 << k
+                if not (revealed & kb) and not (flagged & kb):
+                    q.append(k)
+    return revealed
 
 
 DIGIT_COLORS = {
