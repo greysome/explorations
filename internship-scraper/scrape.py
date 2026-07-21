@@ -5,7 +5,7 @@ Internship scraper -> Telegram.
 Run every ~3h via cron:
     0 */3 * * *  cd /path/to/this/dir && python3 scrape.py >> scrape.log 2>&1
 
-Env vars: TG_BOT_TOKEN, TG_CHAT_ID.
+Telegram creds:  fill in TG_BOT_TOKEN / TG_CHAT_ID below.
 State:    seen.csv in this dir. Dedupe is by (source,id); last-updated is only
           used on first run to avoid backfilling ancient postings.
 
@@ -20,7 +20,6 @@ No external deps -- stdlib only.
 import csv
 import html
 import json
-import os
 import re
 import sys
 import urllib.request
@@ -29,6 +28,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ---- config: edit freely ----------------------------------------------------
+
+TG_BOT_TOKEN = ""   # from @BotFather
+TG_CHAT_ID   = ""   # your user id or a channel id like "@my_channel"
 
 INCLUDE_KEYWORDS = [
     "software", "swe", "engineer", "backend", "infrastructure", "systems",
@@ -229,8 +231,9 @@ def append_seen(rows):
 # ---- telegram ---------------------------------------------------------------
 
 def tg_send(job):
-    token = os.environ["TG_BOT_TOKEN"]
-    chat = os.environ["TG_CHAT_ID"]
+    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+        print(f"[tg] skipped (no creds): {job['id']}", file=sys.stderr)
+        return
     desc = job["description"] or ""
     if len(desc) > 700:
         desc = desc[:700].rstrip() + "…"
@@ -240,9 +243,10 @@ def tg_send(job):
         f"{html.escape(job['url'])}"
     )
     try:
-        http_json(f"https://api.telegram.org/bot{token}/sendMessage",
+        http_json(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
                   method="POST",
-                  body={"chat_id": chat, "text": text, "parse_mode": "HTML",
+                  body={"chat_id": TG_CHAT_ID, "text": text,
+                        "parse_mode": "HTML",
                         "disable_web_page_preview": False})
     except urllib.error.HTTPError as e:
         print(f"[tg] {e.code}: {e.read().decode(errors='replace')}", file=sys.stderr)
