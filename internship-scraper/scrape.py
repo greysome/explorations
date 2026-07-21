@@ -46,16 +46,65 @@ EXCLUDE_KEYWORDS = [
     "data analyst", "business analyst", "hr ",
 ]
 
+# Slugs are case-sensitive for Lever/Ashby — keep casing as-is.
+# Comments = whether an SG role was seen on the public board (any role, not
+# just intern); "loads only" = board is valid but no SG role confirmed.
 GREENHOUSE_BOARDS = [
-    "stripe", "databricks", "cloudflare", "gitlab", "discord", "figma",
-    "notion", "airtable", "rippling", "openai", "anthropic", "airbnb",
-    "dropbox", "reddit", "pinterest", "snap",
+    "stripe",        # loads; SG eng hub, no SG role in top results
+    "databricks",    # SG confirmed
+    "cloudflare",    # SG confirmed (incl. intern posts)
+    "gitlab",        # SG confirmed
+    "datadog",       # SG confirmed
+    "hashicorp",     # SG confirmed
+    "anthropic",     # SG confirmed
+    "discord",       # SG confirmed
+    "coinbase",      # SG confirmed
+    "reddit",        # SG confirmed
+    "gemini",        # SG confirmed
+    "grafanalabs",   # SG confirmed
+    "zscaler",       # SG confirmed
+    "twilio",        # SG confirmed
+    "wizinc",        # SG confirmed (slug is wizinc, not wiz)
+    "chainguard",    # SG confirmed
+    "dataiku",       # SG confirmed
+    "braze",         # loads; SG office documented
+    "snyk",          # loads; SG office documented
 ]
 LEVER_COMPANIES = [
-    "netflix", "spotify", "plaid", "ramp", "attentive",
+    "spotify",       # SG confirmed
+    "palantir",      # SG confirmed (incl. SWE intern)
+    "gojek",         # SG confirmed
+    "GoToGroup",     # SG confirmed
+    "ninjavan",      # SG confirmed (SG HQ)
+    "Coda",          # SG confirmed (Coda Payments, SG HQ)
+    "sonarsource",   # SG confirmed
+    "patsnap",       # SG confirmed (incl. Full Stack Intern)
+    "matchgroup",    # SG confirmed
+    "crypto",        # SG confirmed (crypto.com; keyword filter drops trading roles)
+    "shopback-2",    # SG confirmed (incl. SWE Intern Backend)
+    "nium",          # loads; SG HQ
+    "canva",         # SG confirmed
+    "anchorage",     # SG confirmed (mostly non-SWE; keyword filter handles it)
+    "lalamove",      # loads
 ]
 ASHBY_BOARDS = [
-    # e.g. "posthog", "linear", "vercel"
+    "openai",        # SG confirmed
+    "ramp",          # SG confirmed
+    "posthog",       # SG confirmed
+    "deel",          # SG confirmed
+    "cohere",        # SG confirmed
+    "notion",        # SG confirmed (migrated from Greenhouse)
+    "replit",        # SG confirmed
+    "cognition",     # SG confirmed
+    "Sierra",        # SG confirmed (founding APAC team)
+    "Plaud",         # SG confirmed
+    "manusai",       # SG confirmed
+    "Deepgram",      # SG confirmed
+    "Linear",        # loads; fully remote
+    "cursor",        # loads
+    "supabase",      # loads
+    "harvey",        # loads
+    "perplexity",    # loads
 ]
 
 # Only used before seen.csv exists, to skip ancient backlog.
