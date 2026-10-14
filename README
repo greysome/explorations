@@ -1,1 +1,6 @@
-betterstatus - a proof-of-concept terminal statusbar
+betterstatus: a proof-of-concept terminal statusbar
+
+odin: programs for learning odin
+- guess: guessing game from 1-100
+- 1gram-dist: compute frequency distribution of 1-grams from stdin
+- 1gram-huffman: compute Huffman code for 1-grams from stdin
